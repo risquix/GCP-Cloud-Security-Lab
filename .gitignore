@@ -1,0 +1,36 @@
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+terraform.tfvars
+*.auto.tfvars
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.env
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Secrets
+*.key
+*.pem
+*.json
+secrets/
+
+# Logs
+*.log
+logs/
+
+# Kubernetes
+kubeconfig
+*.kubeconfig
