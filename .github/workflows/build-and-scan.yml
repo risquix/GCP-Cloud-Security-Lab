@@ -22,10 +22,9 @@ jobs:
       - uses: actions/checkout@v4
       
       - name: Run Semgrep
-        uses: returntocorp/semgrep-action@v1
-        with:
-          config: auto
-          generateSarif: true
+        run: |
+          pip install semgrep
+          semgrep --config=auto --sarif --output=semgrep.sarif app/ || true
         continue-on-error: true
       
       - name: Upload Semgrep results
@@ -136,7 +135,7 @@ jobs:
             --build-arg RUN_AS_ROOT=false \
             -t ${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/wizknowledge-prod:${{ github.sha }} \
             -t ${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/wizknowledge-prod:latest \
-            -f app/Dockerfile.secure \
+            -f app/Dockerfile \
             ./app
       
       - name: Scan with Trivy (Strict)
