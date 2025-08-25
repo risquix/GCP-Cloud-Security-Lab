@@ -1,0 +1,171 @@
+name: Build, Scan, and Push Images
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'app/**'
+      - '.github/workflows/build-and-scan.yml'
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  PROJECT_ID: clgcporg10-173
+  REGION: us-central1
+  REPOSITORY: wizknowledge
+
+jobs:
+  code-security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Run Semgrep
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: auto
+          generateSarif: true
+      
+      - name: Upload Semgrep results
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: semgrep.sarif
+      
+      - name: Run Bandit Security Scan
+        run: |
+          pip install bandit
+          bandit -r app/ -f json -o bandit-report.json || true
+      
+      - name: Upload Bandit results
+        uses: actions/upload-artifact@v3
+        with:
+          name: bandit-report
+          path: bandit-report.json
+
+  build-dev-image:
+    needs: code-security-scan
+    if: github.ref == 'refs/heads/develop' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+      
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      
+      - name: Configure Docker for Artifact Registry
+        run: |
+          gcloud auth configure-docker ${REGION}-docker.pkg.dev
+      
+      - name: Build Dev Image (Vulnerable)
+        run: |
+          docker build \
+            --build-arg RUN_AS_ROOT=true \
+            -t ${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/wizknowledge-dev:${{ github.sha }} \
+            -t ${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/wizknowledge-dev:latest \
+            -f app/Dockerfile \
+            ./app
+      
+      - name: Scan with Trivy (Allow vulnerabilities for dev)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/wizknowledge-dev:${{ github.sha }}
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+          exit-code: '0'  # Don't fail for dev
+      
+      - name: Upload Trivy results
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: trivy-results.sarif
+      
+      - name: Push Dev Image
+        run: |
+          docker push ${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/wizknowledge-dev:${{ github.sha }}
+          docker push ${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/wizknowledge-dev:latest
+      
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/wizknowledge-dev:${{ github.sha }}
+          format: cyclonedx-json
+      
+      - name: Create Vulnerability Report
+        run: |
+          echo "## Dev Image Vulnerability Report" >> $GITHUB_STEP_SUMMARY
+          echo "Image: wizknowledge-dev:${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "### Intentional Vulnerabilities:" >> $GITHUB_STEP_SUMMARY
+          echo "- Running as root user (uid=0)" >> $GITHUB_STEP_SUMMARY
+          echo "- Privileged container capabilities" >> $GITHUB_STEP_SUMMARY
+          echo "- Outdated base image packages" >> $GITHUB_STEP_SUMMARY
+          echo "- No security hardening applied" >> $GITHUB_STEP_SUMMARY
+
+  build-prod-image:
+    needs: code-security-scan
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+      
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      
+      - name: Configure Docker for Artifact Registry
+        run: |
+          gcloud auth configure-docker ${REGION}-docker.pkg.dev
+      
+      - name: Build Prod Image (Secure)
+        run: |
+          docker build \
+            --build-arg RUN_AS_ROOT=false \
+            -t ${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/wizknowledge-prod:${{ github.sha }} \
+            -t ${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/wizknowledge-prod:latest \
+            -f app/Dockerfile.secure \
+            ./app
+      
+      - name: Scan with Trivy (Strict)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/wizknowledge-prod:${{ github.sha }}
+          format: 'table'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'  # Fail on vulnerabilities
+      
+      - name: Sign image with Cosign
+        run: |
+          cosign sign --key env://COSIGN_PRIVATE_KEY \
+            ${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/wizknowledge-prod:${{ github.sha }}
+        env:
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+      
+      - name: Create attestation
+        run: |
+          gcloud beta container binauthz attestations sign-and-create \
+            --attestor="prod-attestor" \
+            --attestor-project="${PROJECT_ID}" \
+            --artifact-url="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/wizknowledge-prod:${{ github.sha }}" \
+            --keyversion-project="${PROJECT_ID}" \
+            --keyversion-location="${REGION}" \
+            --keyversion-keyring="prod-keyring" \
+            --keyversion-key="prod-attestor-key" \
+            --keyversion="1"
+      
+      - name: Push Prod Image
+        run: |
+          docker push ${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/wizknowledge-prod:${{ github.sha }}
+          docker push ${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/wizknowledge-prod:latest

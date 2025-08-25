@@ -23,6 +23,7 @@ env/
 
 # Secrets
 *.key
+*.keys
 *.pem
 *.json
 secrets/

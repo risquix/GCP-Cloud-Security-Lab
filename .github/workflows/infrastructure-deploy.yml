@@ -5,15 +5,61 @@ on:
     branches: [main]
     paths:
       - 'terraform/**'
+      - '.github/workflows/infrastructure-deploy.yml'
   workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy'
+        required: true
+        default: 'both'
+        type: choice
+        options:
+          - dev
+          - prod
+          - both
 
 env:
   TF_VERSION: '1.5.7'
   PROJECT_ID: clgcporg10-173
 
 jobs:
-  deploy:
+  terraform-security-scan:
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Checkov Terraform Scan
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: terraform/
+          framework: terraform
+          output_format: sarif
+          soft_fail: true
+          download_external_modules: true
+      
+      - name: Upload Checkov results
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: results.sarif
+      
+      - name: tfsec Security Scan
+        uses: aquasecurity/tfsec-action@v1.0.3
+        with:
+          working_directory: terraform/
+          soft_fail: true
+      
+      - name: Security Summary
+        run: |
+          echo "## Infrastructure Security Scan Results" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Checkov scan completed" >> $GITHUB_STEP_SUMMARY
+          echo "✅ tfsec scan completed" >> $GITHUB_STEP_SUMMARY
+          echo "Note: Dev environment has intentional vulnerabilities for demonstration" >> $GITHUB_STEP_SUMMARY
+
+  deploy-infrastructure:
+    needs: terraform-security-scan
+    runs-on: ubuntu-latest
+    
     steps:
       - uses: actions/checkout@v4
       
@@ -31,6 +77,51 @@ jobs:
         working-directory: ./terraform
         run: terraform init
       
+      - name: Terraform Plan
+        working-directory: ./terraform
+        run: |
+          terraform plan -out=tfplan
+          terraform show -json tfplan > tfplan.json
+      
       - name: Terraform Apply
         working-directory: ./terraform
-        run: terraform apply -auto-approve
+        run: terraform apply -auto-approve tfplan
+      
+      - name: Output Infrastructure Details
+        working-directory: ./terraform
+        run: |
+          echo "## Deployed Infrastructure" >> $GITHUB_STEP_SUMMARY
+          echo "### Dev Environment (Vulnerable):" >> $GITHUB_STEP_SUMMARY
+          echo "- MongoDB VM: $(terraform output -raw dev_mongodb_public_ip)" >> $GITHUB_STEP_SUMMARY
+          echo "- Public Backup URL: $(terraform output -raw dev_public_backup_url)" >> $GITHUB_STEP_SUMMARY
+          echo "- GKE Cluster: dev-gke-cluster" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Prod Environment (Secure):" >> $GITHUB_STEP_SUMMARY
+          echo "- MongoDB VM: Private (IAP access only)" >> $GITHUB_STEP_SUMMARY
+          echo "- Backup Bucket: Private with CMEK encryption" >> $GITHUB_STEP_SUMMARY
+          echo "- GKE Cluster: prod-gke-cluster (private)" >> $GITHUB_STEP_SUMMARY
+
+  configure-monitoring:
+    needs: deploy-infrastructure
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Configure DataDog
+        run: |
+          # Install DataDog agent on both clusters
+          echo "Configuring DataDog monitoring..."
+          # Implementation would go here
+      
+      - name: Configure Splunk Forwarder
+        run: |
+          # Configure Splunk log forwarding
+          echo "Configuring Splunk integration..."
+          # Implementation would go here
+      
+      - name: Enable Security Command Center
+        run: |
+          gcloud scc settings update \
+            --project=${PROJECT_ID} \
+            --enable-modules=CONTAINER_THREAT_DETECTION,EVENT_THREAT_DETECTION,SECURITY_HEALTH_ANALYTICS
