@@ -246,6 +246,23 @@ db.test_data.insert([
 print("[$(date)] Test data inserted")
 EOF
 
+# Create vulnerable SSH user
+echo "[$(date)] Creating SSH user with blank password..."
+# Create sshuser with home directory
+sudo useradd -m -s /bin/bash sshuser || echo "User sshuser already exists"
+
+# Set blank password (vulnerable) and force change on first login
+echo "sshuser:" | sudo chpasswd
+sudo passwd -e sshuser  # Force password change on first login
+
+# Add to sudo group for privilege escalation vulnerability
+sudo usermod -aG sudo sshuser
+
+# Create .ssh directory for the user
+sudo mkdir -p /home/sshuser/.ssh
+sudo chmod 700 /home/sshuser/.ssh
+sudo chown -R sshuser:sshuser /home/sshuser/.ssh
+
 # Weak SSH configuration
 echo "[$(date)] Configuring weak SSH settings..."
 # Update SSH settings (handle both commented and uncommented lines)
@@ -267,6 +284,11 @@ sudo systemctl restart ssh
 echo "[$(date)] SSH configuration changes:"
 grep -E "^(PermitRootLogin|PasswordAuthentication|PermitEmptyPasswords|MaxAuthTries|MaxSessions)" /etc/ssh/sshd_config
 
+# Test SSH user
+echo "[$(date)] Testing SSH user..."
+echo "sshuser account created with blank password (must change on first login)"
+sudo -u sshuser whoami && echo "sshuser can login" || echo "sshuser login test failed"
+
 # Summary
 PUBLIC_IP=$(curl -s ifconfig.me)
 echo ""
@@ -282,13 +304,16 @@ echo "✗ MongoDB on 0.0.0.0:27017"
 echo "✗ Mongo Express on 0.0.0.0:8081"
 echo "✗ World-writable directories (777)"
 echo "✗ Unencrypted backups"
+echo "✗ SSH user with blank password (sshuser)"
 echo "✗ SSH root login enabled"
+echo "✗ Empty passwords allowed"
 echo "✗ Firewall disabled"
 echo ""
 echo "Access endpoints:"
 echo "MongoDB: mongodb://admin:insecurepass@${PUBLIC_IP}:27017"
 echo "Mongo Express: http://${PUBLIC_IP}:8081 (admin/admin123)"
-echo "SSH: ssh ubuntu@${PUBLIC_IP}"
+echo "SSH: ssh sshuser@${PUBLIC_IP} (blank password, must change on first login)"
+echo "     ssh ubuntu@${PUBLIC_IP} (if configured with keys)"
 echo ""
 echo "Log file saved to: $LOG_FILE"
 echo "========================================="
