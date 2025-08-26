@@ -248,12 +248,24 @@ EOF
 
 # Weak SSH configuration
 echo "[$(date)] Configuring weak SSH settings..."
-sudo sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
-sudo sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
-sudo sed -i 's/#PermitEmptyPasswords no/PermitEmptyPasswords yes/' /etc/ssh/sshd_config
+# Update SSH settings (handle both commented and uncommented lines)
+sudo sed -i 's/^#*PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
+sudo sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config  
+sudo sed -i 's/^#*PermitEmptyPasswords.*/PermitEmptyPasswords yes/' /etc/ssh/sshd_config
+sudo sed -i 's/^#*ChallengeResponseAuthentication.*/ChallengeResponseAuthentication yes/' /etc/ssh/sshd_config
+
+# Remove existing MaxAuthTries/MaxSessions if present, then add new ones
+sudo sed -i '/^MaxAuthTries/d' /etc/ssh/sshd_config
+sudo sed -i '/^MaxSessions/d' /etc/ssh/sshd_config
 echo "MaxAuthTries 100" | sudo tee -a /etc/ssh/sshd_config
 echo "MaxSessions 100" | sudo tee -a /etc/ssh/sshd_config
+
+echo "[$(date)] Restarting SSH service..."
 sudo systemctl restart ssh
+
+# Verify changes
+echo "[$(date)] SSH configuration changes:"
+grep -E "^(PermitRootLogin|PasswordAuthentication|PermitEmptyPasswords|MaxAuthTries|MaxSessions)" /etc/ssh/sshd_config
 
 # Summary
 PUBLIC_IP=$(curl -s ifconfig.me)
