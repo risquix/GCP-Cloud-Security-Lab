@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6 col-lg-5">
+        <div class="card shadow-sm">
+            <div class="card-body p-5">
+                <div class="text-center mb-4">
+                    <i class="bi bi-person-plus display-4 text-primary"></i>
+                    <h2 class="mt-3 mb-1">Create Account</h2>
+                    <p class="text-muted">Join WizKnowledge AI to start learning</p>
+                </div>
+
+                <!-- Vulnerability Warning -->
+                <div class="alert alert-warning small" role="alert">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    <strong>Security Lab:</strong> This registration form has intentional vulnerabilities for educational purposes.
+                </div>
+
+                <form method="post" action="/register" id="registerForm">
+                    <div class="mb-3">
+                        <label for="username" class="form-label">Username</label>
+                        <input type="text" 
+                               class="form-control" 
+                               id="username" 
+                               name="username" 
+                               required 
+                               minlength="3"
+                               placeholder="Enter username">
+                        <div class="form-text">Minimum 3 characters</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="email" class="form-label">Email Address</label>
+                        <input type="email" 
+                               class="form-control" 
+                               id="email" 
+                               name="email" 
+                               required 
+                               placeholder="Enter email address">
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="password" class="form-label">Password</label>
+                        <input type="password" 
+                               class="form-control" 
+                               id="password" 
+                               name="password" 
+                               required 
+                               minlength="3"
+                               placeholder="Enter password">
+                        <div class="form-text text-danger">
+                            <i class="bi bi-exclamation-triangle"></i>
+                            Vulnerability: Weak password requirements (min 3 chars)
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label for="confirm_password" class="form-label">Confirm Password</label>
+                        <input type="password" 
+                               class="form-control" 
+                               id="confirm_password" 
+                               name="confirm_password" 
+                               required 
+                               placeholder="Confirm password">
+                    </div>
+
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary btn-lg">
+                            <i class="bi bi-person-plus"></i> Create Account
+                        </button>
+                    </div>
+                </form>
+
+                <div class="text-center mt-4">
+                    <p class="text-muted">
+                        Already have an account? 
+                        <a href="/login" class="text-decoration-none">Sign in here</a>
+                    </p>
+                </div>
+
+                <!-- Security Issues Display -->
+                <div class="mt-4">
+                    <h6 class="text-danger">Security Issues in This Form:</h6>
+                    <ul class="small text-muted">
+                        <li>Weak password requirements (should require 8+ chars, complexity)</li>
+                        <li>No CAPTCHA protection against bot registration</li>
+                        <li>No email verification before activation</li>
+                        <li>Form may be vulnerable to CSRF attacks</li>
+                        <li>No rate limiting on registration attempts</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Client-side password validation (vulnerable - can be bypassed)
+    document.getElementById('registerForm').addEventListener('submit', function(e) {
+        const password = document.getElementById('password').value;
+        const confirmPassword = document.getElementById('confirm_password').value;
+        
+        if (password !== confirmPassword) {
+            e.preventDefault();
+            alert('Passwords do not match!');
+            return false;
+        }
+        
+        // VULNERABILITY: Client-side validation only
+        if (password.length < 3) {
+            e.preventDefault();
+            alert('Password must be at least 3 characters long!');
+            return false;
+        }
+        
+        return true;
+    });
+</script>
+{% endblock %}

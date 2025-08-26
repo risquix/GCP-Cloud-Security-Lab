@@ -1,0 +1,261 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <!-- User Info Sidebar -->
+    <div class="col-lg-3">
+        <div class="card mb-4">
+            <div class="card-body text-center">
+                <i class="bi bi-person-circle display-4 text-primary"></i>
+                <h5 class="card-title mt-2">{{ user.username }}</h5>
+                <p class="card-text text-muted">{{ user.email }}</p>
+                <small class="text-muted">
+                    Member since: {{ user.created_at.strftime('%B %Y') if user.created_at else 'N/A' }}
+                </small>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0"><i class="bi bi-info-circle"></i> Security Notice</h6>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-warning small" role="alert">
+                    This chat interface has intentional vulnerabilities:
+                    <ul class="small mt-2 mb-0">
+                        <li>No input sanitization</li>
+                        <li>No rate limiting</li>
+                        <li>XSS vulnerabilities</li>
+                        <li>No CSRF protection</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chat Interface -->
+    <div class="col-lg-9">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="bi bi-robot"></i> WizKnowledge AI Chat
+                </h5>
+                <button class="btn btn-outline-secondary btn-sm" onclick="clearChat()">
+                    <i class="bi bi-trash"></i> Clear Chat
+                </button>
+            </div>
+            
+            <div class="card-body">
+                <!-- Chat Messages Container -->
+                <div id="chatContainer" class="chat-container mb-3" style="height: 400px; border: 1px solid #dee2e6; border-radius: 5px; padding: 15px; overflow-y: auto;">
+                    {% if chats %}
+                        {% for chat in chats %}
+                        <div class="message-pair mb-3">
+                            <div class="d-flex justify-content-end mb-2">
+                                <div class="message-user px-3 py-2 rounded-3 max-width-75">
+                                    <strong>You:</strong> {{ chat.message }}
+                                    <div class="small text-light opacity-75 mt-1">
+                                        {{ chat.timestamp.strftime('%m/%d %H:%M') if chat.timestamp else '' }}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="d-flex justify-content-start">
+                                <div class="message-ai px-3 py-2 rounded-3 max-width-75">
+                                    <strong>AI:</strong> {{ chat.response }}
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="text-center text-muted py-5">
+                            <i class="bi bi-chat-dots display-4"></i>
+                            <h5 class="mt-3">No conversations yet</h5>
+                            <p>Start a conversation by typing a message below!</p>
+                        </div>
+                    {% endif %}
+                </div>
+
+                <!-- Chat Input Form -->
+                <form id="chatForm" onsubmit="sendMessage(event)">
+                    <div class="input-group">
+                        <input type="text" 
+                               class="form-control" 
+                               id="messageInput" 
+                               name="message" 
+                               placeholder="Ask me about cybersecurity, secure coding, or any security topic..."
+                               required
+                               autocomplete="off">
+                        <button class="btn btn-primary" type="submit">
+                            <i class="bi bi-send"></i> Send
+                        </button>
+                    </div>
+                </form>
+
+                <!-- Quick Questions -->
+                <div class="mt-3">
+                    <p class="small text-muted mb-2">Quick questions to try:</p>
+                    <div class="d-flex flex-wrap gap-2">
+                        <button class="btn btn-outline-primary btn-sm" onclick="askQuestion('What is SQL injection?')">
+                            SQL Injection
+                        </button>
+                        <button class="btn btn-outline-primary btn-sm" onclick="askQuestion('How to prevent XSS attacks?')">
+                            XSS Prevention
+                        </button>
+                        <button class="btn btn-outline-primary btn-sm" onclick="askQuestion('Password security best practices')">
+                            Password Security
+                        </button>
+                        <button class="btn btn-outline-primary btn-sm" onclick="askQuestion('What is HTTPS?')">
+                            HTTPS
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chat History -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h6 class="mb-0"><i class="bi bi-clock-history"></i> Recent Chat History</h6>
+            </div>
+            <div class="card-body">
+                {% if chats %}
+                    <div class="list-group list-group-flush">
+                        {% for chat in chats[:5] %}
+                        <div class="list-group-item border-0 px-0">
+                            <div class="d-flex w-100 justify-content-between">
+                                <h6 class="mb-1">{{ chat.message[:50] }}{% if chat.message|length > 50 %}...{% endif %}</h6>
+                                <small class="text-muted">{{ chat.timestamp.strftime('%m/%d %H:%M') if chat.timestamp else '' }}</small>
+                            </div>
+                            <p class="mb-1 text-muted small">{{ chat.response[:100] }}{% if chat.response|length > 100 %}...{% endif %}</p>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p class="text-muted text-center">No chat history yet. Start a conversation above!</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.max-width-75 {
+    max-width: 75%;
+}
+.message-user {
+    background-color: #007bff;
+    color: white;
+}
+.message-ai {
+    background-color: #f8f9fa;
+    color: #333;
+    border: 1px solid #dee2e6;
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // VULNERABILITY: No CSRF protection on AJAX requests
+    async function sendMessage(event) {
+        event.preventDefault();
+        
+        const messageInput = document.getElementById('messageInput');
+        const message = messageInput.value.trim();
+        
+        if (!message) return;
+        
+        // Disable input while processing
+        messageInput.disabled = true;
+        const submitBtn = event.target.querySelector('button[type="submit"]');
+        const originalBtnText = submitBtn.innerHTML;
+        submitBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Sending...';
+        
+        try {
+            // Add user message to chat immediately
+            addMessageToChat(message, 'user');
+            messageInput.value = '';
+            
+            // Send to API
+            const formData = new FormData();
+            formData.append('message', message);
+            
+            // VULNERABILITY: No input sanitization on client side
+            const response = await fetch('/api/chat', {
+                method: 'POST',
+                body: formData
+                // VULNERABILITY: No CSRF token
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                // VULNERABILITY: Direct insertion of response without sanitization (XSS risk)
+                addMessageToChat(data.response, 'ai');
+            } else {
+                addMessageToChat('Sorry, I encountered an error processing your request.', 'ai');
+            }
+        } catch (error) {
+            console.error('Chat error:', error);
+            addMessageToChat('Sorry, I encountered a network error. Please try again.', 'ai');
+        } finally {
+            // Re-enable input
+            messageInput.disabled = false;
+            submitBtn.innerHTML = originalBtnText;
+            messageInput.focus();
+        }
+    }
+    
+    function addMessageToChat(message, sender) {
+        const chatContainer = document.getElementById('chatContainer');
+        const timestamp = new Date().toLocaleString();
+        
+        let messageHtml;
+        if (sender === 'user') {
+            messageHtml = `
+                <div class="d-flex justify-content-end mb-2">
+                    <div class="message-user px-3 py-2 rounded-3 max-width-75">
+                        <strong>You:</strong> ${message}
+                        <div class="small text-light opacity-75 mt-1">${timestamp}</div>
+                    </div>
+                </div>
+            `;
+        } else {
+            messageHtml = `
+                <div class="d-flex justify-content-start mb-3">
+                    <div class="message-ai px-3 py-2 rounded-3 max-width-75">
+                        <strong>AI:</strong> ${message}
+                    </div>
+                </div>
+            `;
+        }
+        
+        // VULNERABILITY: innerHTML allows XSS attacks
+        chatContainer.innerHTML += messageHtml;
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+    
+    function askQuestion(question) {
+        const messageInput = document.getElementById('messageInput');
+        messageInput.value = question;
+        messageInput.focus();
+    }
+    
+    function clearChat() {
+        // VULNERABILITY: Client-side only clearing (data still in database)
+        const chatContainer = document.getElementById('chatContainer');
+        chatContainer.innerHTML = `
+            <div class="text-center text-muted py-5">
+                <i class="bi bi-chat-dots display-4"></i>
+                <h5 class="mt-3">Chat cleared</h5>
+                <p>Start a new conversation by typing a message below!</p>
+            </div>
+        `;
+    }
+    
+    // Auto-focus on message input
+    document.getElementById('messageInput').focus();
+    
+    // VULNERABILITY: No session timeout handling
+    // VULNERABILITY: No rate limiting on client side
+</script>
+{% endblock %}

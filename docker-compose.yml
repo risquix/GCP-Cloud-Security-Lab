@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  # Flask application
+  app:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+      args:
+        RUN_AS_ROOT: "false"  # Run securely for local testing
+    ports:
+      - "8080:8080"
+    environment:
+      - FLASK_ENV=development
+      - FLASK_DEBUG=1
+      - MONGODB_URI=mongodb://admin:insecurepass@mongodb:27017/wizknowledge?authSource=admin
+    volumes:
+      - ./app:/app  # Mount local code for hot reloading
+    depends_on:
+      - mongodb
+    networks:
+      - wizknowledge-net
+
+  # MongoDB for local development
+  mongodb:
+    image: mongo:4.4  # Compatible with ARM64 (still older version for testing)
+    platform: linux/amd64  # Force x86 emulation if needed
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=insecurepass
+      - MONGO_INITDB_DATABASE=wizknowledge
+    volumes:
+      - mongodb_data:/data/db
+      - ./scripts/init-mongodb.js:/docker-entrypoint-initdb.d/init.js:ro
+    networks:
+      - wizknowledge-net
+
+  # Mongo Express for database management
+  mongo-express:
+    image: mongo-express:0.54.0
+    ports:
+      - "8081:8081"
+    environment:
+      - ME_CONFIG_MONGODB_ADMINUSERNAME=admin
+      - ME_CONFIG_MONGODB_ADMINPASSWORD=insecurepass
+      - ME_CONFIG_MONGODB_SERVER=mongodb
+      - ME_CONFIG_BASICAUTH_USERNAME=admin
+      - ME_CONFIG_BASICAUTH_PASSWORD=admin123
+    depends_on:
+      - mongodb
+    networks:
+      - wizknowledge-net
+
+volumes:
+  mongodb_data:
+
+networks:
+  wizknowledge-net:
+    driver: bridge

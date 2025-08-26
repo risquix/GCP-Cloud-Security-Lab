@@ -18,7 +18,13 @@ RUN if [ "$RUN_AS_ROOT" = "false" ]; then \
       chown -R appuser:appuser /app; \
     fi
 
-USER ${RUN_AS_ROOT:+root}${RUN_AS_ROOT:-appuser}
+RUN if [ "$RUN_AS_ROOT" = "true" ]; then \
+      echo "Running as root user"; \
+    else \
+      echo "Running as appuser"; \
+    fi
+
+USER appuser
 
 EXPOSE 8080
 

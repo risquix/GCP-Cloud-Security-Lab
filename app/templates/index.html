@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8 mx-auto">
+        <!-- Hero Section -->
+        <div class="hero-wiz text-center">
+            <div class="hero-content">
+                <h1 class="display-4 mb-4" style="color: var(--wiz-primary-blue); font-weight: 800;">
+                    <i class="bi bi-cloud-lightning-rain" style="color: var(--wiz-secondary-blue);"></i> WizKnowledge AI
+                </h1>
+                <p class="lead mb-4" style="color: var(--wiz-dark-text); font-size: 1.25rem;">
+                    Your AI-powered cloud security knowledge assistant
+                </p>
+                <div class="alert-wiz-warning mb-4">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    <strong>Security Lab Environment:</strong> This application contains intentional vulnerabilities for educational purposes.
+                </div>
+            </div>
+        </div>
+
+        <!-- Features Section -->
+        <div class="row mb-5">
+            <div class="col-md-4">
+                <div class="card-wiz h-100">
+                    <div class="card-body text-center p-4">
+                        <i class="bi bi-chat-dots display-4 icon-wiz mb-3"></i>
+                        <h5 class="card-title" style="color: var(--wiz-dark-text); font-weight: 600;">Interactive Chat</h5>
+                        <p class="card-text" style="color: var(--wiz-gray-text);">Ask questions about cybersecurity, secure coding practices, and get instant AI-powered responses.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card-wiz h-100">
+                    <div class="card-body text-center p-4">
+                        <i class="bi bi-shield-check display-4 icon-wiz mb-3"></i>
+                        <h5 class="card-title" style="color: var(--wiz-dark-text); font-weight: 600;">Security Knowledge</h5>
+                        <p class="card-text" style="color: var(--wiz-gray-text);">Access comprehensive information about vulnerabilities, threat prevention, and security best practices.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card-wiz h-100">
+                    <div class="card-body text-center p-4">
+                        <i class="bi bi-clock-history display-4 icon-wiz mb-3"></i>
+                        <h5 class="card-title" style="color: var(--wiz-dark-text); font-weight: 600;">Chat History</h5>
+                        <p class="card-text" style="color: var(--wiz-gray-text);">Save and review your previous conversations to track your learning progress.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Call to Action -->
+        <div class="card border-0 bg-primary text-white mb-5">
+            <div class="card-body text-center py-5">
+                <h2 class="card-title mb-3">Ready to Get Started?</h2>
+                <p class="card-text mb-4">
+                    Create an account to start chatting with our AI security assistant and save your conversation history.
+                </p>
+                {% if user %}
+                    <a href="/dashboard" class="btn btn-light btn-lg">
+                        <i class="bi bi-chat-dots"></i> Go to Dashboard
+                    </a>
+                {% else %}
+                    <a href="/register" class="btn btn-light btn-lg me-3">
+                        <i class="bi bi-person-plus"></i> Register Now
+                    </a>
+                    <a href="/login" class="btn btn-outline-light btn-lg">
+                        <i class="bi bi-box-arrow-in-right"></i> Login
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Security Warnings -->
+        {% if user %}
+        <div class="alert alert-info" role="alert">
+            <h5><i class="bi bi-info-circle"></i> Welcome back, {{ user.username }}!</h5>
+            <p class="mb-0">You're logged in and ready to start chatting. <a href="/dashboard" class="alert-link">Visit your dashboard</a> to continue your conversations.</p>
+        </div>
+        {% endif %}
+
+        <!-- Demo Section -->
+        <div class="row">
+            <div class="col-12">
+                <h3 class="mb-4">Sample Security Topics You Can Ask About:</h3>
+                <div class="row">
+                    <div class="col-md-6">
+                        <ul class="list-unstyled">
+                            <li class="mb-2"><i class="bi bi-arrow-right text-primary"></i> SQL Injection Prevention</li>
+                            <li class="mb-2"><i class="bi bi-arrow-right text-primary"></i> XSS Attack Mitigation</li>
+                            <li class="mb-2"><i class="bi bi-arrow-right text-primary"></i> Password Security Best Practices</li>
+                            <li class="mb-2"><i class="bi bi-arrow-right text-primary"></i> HTTPS Implementation</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <ul class="list-unstyled">
+                            <li class="mb-2"><i class="bi bi-arrow-right text-primary"></i> Authentication Systems</li>
+                            <li class="mb-2"><i class="bi bi-arrow-right text-primary"></i> Data Encryption Methods</li>
+                            <li class="mb-2"><i class="bi bi-arrow-right text-primary"></i> Secure API Design</li>
+                            <li class="mb-2"><i class="bi bi-arrow-right text-primary"></i> Vulnerability Assessment</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

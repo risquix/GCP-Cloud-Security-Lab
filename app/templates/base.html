@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}{{ title }}{% endblock %}</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
+    
+    <style>
+        :root {
+            /* Wiz.io-inspired color palette - softer, more muted tones */
+            --wiz-primary-blue: #4f46e5;
+            --wiz-secondary-blue: #6366f1;
+            --wiz-light-blue: #f0f9ff;
+            --wiz-accent-blue: #8b5cf6;
+            --wiz-dark-text: #374151;
+            --wiz-gray-text: #9ca3af;
+            --wiz-light-gray: #fafbfc;
+            --wiz-border-gray: #f3f4f6;
+            --wiz-white: #ffffff;
+            --wiz-cloud-gradient: linear-gradient(135deg, #f8fafc 0%, #f0f9ff 50%, #fafbfc 100%);
+            --wiz-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px 0 rgba(0, 0, 0, 0.04);
+            --wiz-shadow-lg: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: var(--wiz-light-gray);
+            color: var(--wiz-dark-text);
+            line-height: 1.6;
+        }
+
+        /* Wiz-style navbar */
+        .navbar-wiz {
+            background: var(--wiz-white);
+            border-bottom: 1px solid var(--wiz-border-gray);
+            box-shadow: var(--wiz-shadow);
+            padding: 1rem 0;
+        }
+
+        .navbar-brand {
+            font-weight: 700;
+            font-size: 1.5rem;
+            color: var(--wiz-primary-blue) !important;
+            letter-spacing: -0.025em;
+        }
+
+        .nav-link {
+            font-weight: 500;
+            color: var(--wiz-gray-text) !important;
+            transition: color 0.2s ease;
+            padding: 0.5rem 1rem !important;
+        }
+
+        .nav-link:hover {
+            color: var(--wiz-primary-blue) !important;
+        }
+
+        /* Wiz-style buttons - softer, more rounded */
+        .btn-wiz-primary {
+            background: var(--wiz-primary-blue);
+            border: none;
+            color: white;
+            font-weight: 500;
+            padding: 0.875rem 2.5rem;
+            border-radius: 0.75rem;
+            transition: all 0.3s ease;
+            box-shadow: var(--wiz-shadow);
+            letter-spacing: 0.025em;
+        }
+
+        .btn-wiz-primary:hover {
+            background: var(--wiz-secondary-blue);
+            transform: translateY(-1px);
+            box-shadow: var(--wiz-shadow-lg);
+            color: white;
+        }
+
+        .btn-wiz-secondary {
+            background: var(--wiz-white);
+            border: 1px solid var(--wiz-border-gray);
+            color: var(--wiz-dark-text);
+            font-weight: 500;
+            padding: 0.875rem 2.5rem;
+            border-radius: 0.75rem;
+            transition: all 0.3s ease;
+            box-shadow: var(--wiz-shadow);
+        }
+
+        .btn-wiz-secondary:hover {
+            background: var(--wiz-light-blue);
+            border-color: var(--wiz-primary-blue);
+            color: var(--wiz-primary-blue);
+        }
+
+        /* Wiz-style cards - softer elevation and more generous spacing */
+        .card-wiz {
+            background: var(--wiz-white);
+            border: 1px solid var(--wiz-border-gray);
+            border-radius: 1.25rem;
+            box-shadow: var(--wiz-shadow);
+            transition: all 0.3s ease;
+            padding: 0.5rem;
+        }
+
+        .card-wiz:hover {
+            transform: translateY(-1px);
+            box-shadow: var(--wiz-shadow-lg);
+            border-color: rgba(79, 70, 229, 0.1);
+        }
+
+        .card-wiz .card-header {
+            background: var(--wiz-cloud-gradient);
+            border-bottom: 1px solid var(--wiz-border-gray);
+            border-radius: 1rem 1rem 0 0 !important;
+            font-weight: 600;
+            color: var(--wiz-primary-blue);
+        }
+
+        /* Hero section styling - more generous spacing */
+        .hero-wiz {
+            background: var(--wiz-cloud-gradient);
+            border-radius: 2rem;
+            padding: 5rem 3rem;
+            margin: 3rem 0;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid var(--wiz-border-gray);
+        }
+
+        .hero-wiz::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(219, 234, 254, 0.3) 0%, transparent 50%);
+            animation: float 6s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-20px); }
+        }
+
+        .hero-content {
+            position: relative;
+            z-index: 2;
+        }
+
+        /* Chat interface */
+        .chat-container {
+            max-height: 500px;
+            overflow-y: auto;
+            background: var(--wiz-white);
+            border: 1px solid var(--wiz-border-gray);
+            border-radius: 1rem;
+            padding: 1.5rem;
+        }
+
+        .message-user {
+            background: var(--wiz-primary-blue);
+            color: white;
+            border-radius: 1rem 1rem 0.25rem 1rem;
+            box-shadow: var(--wiz-shadow);
+        }
+
+        .message-ai {
+            background: var(--wiz-light-blue);
+            color: var(--wiz-dark-text);
+            border: 1px solid var(--wiz-border-gray);
+            border-radius: 1rem 1rem 1rem 0.25rem;
+        }
+
+        /* Security badges */
+        .vulnerability-badge {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            color: white;
+            font-size: 0.75rem;
+            font-weight: 600;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            box-shadow: var(--wiz-shadow);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.8; }
+        }
+
+        .security-badge {
+            background: linear-gradient(135deg, var(--wiz-secondary-blue), var(--wiz-primary-blue));
+            color: white;
+            font-size: 0.75rem;
+            font-weight: 600;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            box-shadow: var(--wiz-shadow);
+        }
+
+        /* Form styling - softer borders and focus states */
+        .form-control-wiz {
+            border: 1px solid var(--wiz-border-gray);
+            border-radius: 0.875rem;
+            padding: 1rem 1.25rem;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            background: var(--wiz-white);
+        }
+
+        .form-control-wiz:focus {
+            border-color: var(--wiz-primary-blue);
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.08);
+            outline: none;
+            background: var(--wiz-white);
+        }
+
+        /* Footer */
+        footer {
+            background: var(--wiz-white);
+            border-top: 1px solid var(--wiz-border-gray);
+            margin-top: 4rem;
+            padding: 2rem 0;
+        }
+
+        /* Alerts */
+        .alert-wiz-warning {
+            background: #fef3cd;
+            border: 1px solid #facc15;
+            color: #92400e;
+            border-radius: 0.75rem;
+            padding: 1rem 1.5rem;
+        }
+
+        .alert-wiz-info {
+            background: var(--wiz-light-blue);
+            border: 1px solid var(--wiz-accent-blue);
+            color: var(--wiz-primary-blue);
+            border-radius: 0.75rem;
+            padding: 1rem 1.5rem;
+        }
+
+        /* Icons */
+        .icon-wiz {
+            color: var(--wiz-primary-blue);
+            font-size: 1.25rem;
+        }
+
+        /* Dropdown */
+        .dropdown-menu {
+            border: 1px solid var(--wiz-border-gray);
+            box-shadow: var(--wiz-shadow-lg);
+            border-radius: 0.75rem;
+            padding: 0.5rem;
+        }
+
+        .dropdown-item {
+            border-radius: 0.5rem;
+            padding: 0.5rem 1rem;
+            transition: all 0.2s ease;
+        }
+
+        .dropdown-item:hover {
+            background: var(--wiz-light-blue);
+            color: var(--wiz-primary-blue);
+        }
+    </style>
+    
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-wiz">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <i class="bi bi-cloud-check icon-wiz"></i> WizKnowledge AI
+                <span class="security-badge">Security Lab</span>
+            </a>
+            
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/"><i class="bi bi-house"></i> Home</a>
+                    </li>
+                    {% if user %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="/dashboard"><i class="bi bi-chat-dots"></i> Dashboard</a>
+                    </li>
+                    {% endif %}
+                </ul>
+                
+                <ul class="navbar-nav">
+                    {% if user %}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-person-circle"></i> {{ user.username }}
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="/api/users/me"><i class="bi bi-person icon-wiz"></i> Profile</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="/logout"><i class="bi bi-box-arrow-right icon-wiz"></i> Logout</a></li>
+                        </ul>
+                    </li>
+                    {% else %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="/login"><i class="bi bi-box-arrow-in-right"></i> Login</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/register"><i class="bi bi-person-plus"></i> Register</a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="container mt-4">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer>
+        <div class="container">
+            <div class="row">
+                <div class="col-md-6">
+                    <h6 style="color: var(--wiz-primary-blue); font-weight: 700;">
+                        <i class="bi bi-cloud-check icon-wiz"></i> WizKnowledge Security Lab
+                    </h6>
+                    <p style="color: var(--wiz-gray-text); font-size: 0.9rem;">
+                        This application contains intentional security vulnerabilities for educational purposes.
+                        <strong>Do not use in production environments.</strong>
+                    </p>
+                </div>
+                <div class="col-md-6 text-end">
+                    <p style="color: var(--wiz-gray-text); font-size: 0.9rem;">
+                        <i class="bi bi-shield-exclamation" style="color: #facc15;"></i>
+                        Security Lab Environment v2.0<br>
+                        <a href="/health" class="text-decoration-none" style="color: var(--wiz-primary-blue);">Health Check</a>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>
