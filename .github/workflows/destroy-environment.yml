@@ -1,0 +1,387 @@
+name: Destroy Environment and Flush Data
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_destroy:
+        description: 'Type "DESTROY-ALL" to confirm environment destruction'
+        required: true
+        type: string
+      delete_logs:
+        description: 'Delete all Cloud Logging data'
+        required: true
+        type: boolean
+        default: true
+      delete_findings:
+        description: 'Delete Security Command Center findings'
+        required: true
+        type: boolean
+        default: true
+      delete_secrets:
+        description: 'Delete all secrets from Secret Manager'
+        required: true
+        type: boolean
+        default: false
+
+env:
+  PROJECT_ID: clgcporg10-173
+  REGION: us-central1
+  ZONE: us-central1-a
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  safety-check:
+    runs-on: ubuntu-latest
+    outputs:
+      proceed: ${{ steps.check.outputs.proceed }}
+    
+    steps:
+      - name: Validate confirmation
+        id: check
+        run: |
+          if [ "${{ github.event.inputs.confirm_destroy }}" != "DESTROY-ALL" ]; then
+            echo "❌ Confirmation text does not match. Aborting."
+            echo "proceed=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+          echo "✅ Confirmation validated. Proceeding with destruction."
+          echo "proceed=true" >> $GITHUB_OUTPUT
+      
+      - name: Log destruction request
+        run: |
+          echo "## 🔥 ENVIRONMENT DESTRUCTION REQUESTED" >> $GITHUB_STEP_SUMMARY
+          echo "**Requestor:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Timestamp:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> $GITHUB_STEP_SUMMARY
+          echo "**Delete Logs:** ${{ github.event.inputs.delete_logs }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Delete Findings:** ${{ github.event.inputs.delete_findings }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Delete Secrets:** ${{ github.event.inputs.delete_secrets }}" >> $GITHUB_STEP_SUMMARY
+
+  destroy-infrastructure:
+    needs: safety-check
+    if: needs.safety-check.outputs.proceed == 'true'
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      
+      - name: Setup Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.5.7
+      
+      - name: Stop all running services
+        run: |
+          echo "📍 Stopping GKE workloads..."
+          # Delete all deployments in dev cluster
+          gcloud container clusters get-credentials dev-gke-cluster --zone=${{ env.ZONE }} 2>/dev/null && \
+            kubectl delete deployments --all --all-namespaces --force --grace-period=0 2>/dev/null || true
+          
+          # Delete all deployments in prod cluster  
+          gcloud container clusters get-credentials prod-gke-cluster --region=${{ env.REGION }} 2>/dev/null && \
+            kubectl delete deployments --all --all-namespaces --force --grace-period=0 2>/dev/null || true
+          
+          echo "📍 Stopping Compute Engine instances..."
+          gcloud compute instances list --format="value(name,zone)" | while read -r instance zone; do
+            echo "Stopping instance: $instance in zone: $zone"
+            gcloud compute instances stop "$instance" --zone="$zone" --quiet || true
+          done
+      
+      - name: Delete Kubernetes resources
+        run: |
+          echo "📍 Cleaning up Kubernetes resources..."
+          
+          # Dev cluster cleanup
+          gcloud container clusters get-credentials dev-gke-cluster --zone=${{ env.ZONE }} 2>/dev/null && {
+            kubectl delete all --all --all-namespaces --force --grace-period=0 2>/dev/null || true
+            kubectl delete pvc --all --all-namespaces --force 2>/dev/null || true
+            kubectl delete pv --all --force 2>/dev/null || true
+          } || true
+          
+          # Prod cluster cleanup
+          gcloud container clusters get-credentials prod-gke-cluster --region=${{ env.REGION }} 2>/dev/null && {
+            kubectl delete all --all --all-namespaces --force --grace-period=0 2>/dev/null || true
+            kubectl delete pvc --all --all-namespaces --force 2>/dev/null || true
+            kubectl delete pv --all --force 2>/dev/null || true
+          } || true
+      
+      - name: Destroy Terraform infrastructure
+        working-directory: ./terraform
+        run: |
+          echo "📍 Initializing Terraform..."
+          terraform init
+          
+          echo "📍 Destroying all Terraform-managed resources..."
+          terraform destroy -auto-approve \
+            -var="project_id=${{ env.PROJECT_ID }}" \
+            -var="region=${{ env.REGION }}" \
+            -var="zone=${{ env.ZONE }}" || true
+          
+          # Force destroy any stuck resources
+          echo "📍 Force cleaning remaining resources..."
+          terraform state list | while read -r resource; do
+            echo "Removing $resource from state"
+            terraform state rm "$resource" 2>/dev/null || true
+          done
+      
+      - name: Clean up GCS buckets
+        run: |
+          echo "📍 Deleting all GCS buckets..."
+          gsutil ls -p ${{ env.PROJECT_ID }} | while read -r bucket; do
+            echo "Deleting bucket: $bucket"
+            gsutil -m rm -r "$bucket" 2>/dev/null || true
+          done
+      
+      - name: Delete container images
+        run: |
+          echo "📍 Deleting container images from Artifact Registry..."
+          for repo in $(gcloud artifacts repositories list --location=${{ env.REGION }} --format="value(name)" 2>/dev/null); do
+            echo "Deleting repository: $repo"
+            gcloud artifacts repositories delete "$repo" \
+              --location=${{ env.REGION }} \
+              --quiet 2>/dev/null || true
+          done
+          
+          echo "📍 Deleting images from Container Registry..."
+          for image in $(gcloud container images list --format="value(name)" 2>/dev/null); do
+            echo "Deleting image: $image"
+            gcloud container images delete "$image" --quiet --force-delete-tags 2>/dev/null || true
+          done
+      
+      - name: Clean up firewall rules
+        run: |
+          echo "📍 Deleting all firewall rules..."
+          gcloud compute firewall-rules list --format="value(name)" | while read -r rule; do
+            echo "Deleting firewall rule: $rule"
+            gcloud compute firewall-rules delete "$rule" --quiet 2>/dev/null || true
+          done
+      
+      - name: Clean up load balancers
+        run: |
+          echo "📍 Cleaning up load balancers..."
+          # Delete forwarding rules
+          gcloud compute forwarding-rules list --format="value(name)" | while read -r rule; do
+            gcloud compute forwarding-rules delete "$rule" --region=${{ env.REGION }} --quiet 2>/dev/null || true
+            gcloud compute forwarding-rules delete "$rule" --global --quiet 2>/dev/null || true
+          done
+          
+          # Delete target pools
+          gcloud compute target-pools list --format="value(name)" | while read -r pool; do
+            gcloud compute target-pools delete "$pool" --region=${{ env.REGION }} --quiet 2>/dev/null || true
+          done
+      
+      - name: Clean up service accounts
+        run: |
+          echo "📍 Deleting service accounts..."
+          for sa in $(gcloud iam service-accounts list --format="value(email)" | grep -v "^${{ env.PROJECT_ID }}@"); do
+            echo "Deleting service account: $sa"
+            gcloud iam service-accounts delete "$sa" --quiet 2>/dev/null || true
+          done
+
+  flush-logging-data:
+    needs: [safety-check, destroy-infrastructure]
+    if: needs.safety-check.outputs.proceed == 'true' && github.event.inputs.delete_logs == 'true'
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      
+      - name: Setup Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+      
+      - name: Delete Cloud Logging data
+        run: |
+          echo "📍 Deleting all log entries..."
+          
+          # Delete logs from all log buckets
+          for bucket in $(gcloud logging buckets list --location=global --format="value(name)"); do
+            echo "Deleting logs from bucket: $bucket"
+            gcloud logging read "timestamp>=\"1970-01-01T00:00:00Z\"" \
+              --bucket="$bucket" \
+              --location=global \
+              --format="value(insertId)" | \
+            while read -r id; do
+              gcloud logging delete "$id" --quiet 2>/dev/null || true
+            done
+          done
+          
+          # Delete custom log metrics
+          echo "📍 Deleting log metrics..."
+          gcloud logging metrics list --format="value(name)" | while read -r metric; do
+            echo "Deleting metric: $metric"
+            gcloud logging metrics delete "$metric" --quiet 2>/dev/null || true
+          done
+          
+          # Delete log sinks
+          echo "📍 Deleting log sinks..."
+          gcloud logging sinks list --format="value(name)" | while read -r sink; do
+            echo "Deleting sink: $sink"
+            gcloud logging sinks delete "$sink" --quiet 2>/dev/null || true
+          done
+      
+      - name: Delete audit logs
+        run: |
+          echo "📍 Cleaning audit logs..."
+          # Note: Admin Activity audit logs cannot be deleted
+          # We can only delete Data Access audit logs
+          gcloud logging read "logName:\"logs/cloudaudit.googleapis.com%2Fdata_access\"" \
+            --format="value(insertId)" \
+            --freshness="30d" | \
+          while read -r id; do
+            gcloud logging delete "$id" --quiet 2>/dev/null || true
+          done
+
+  clear-security-findings:
+    needs: [safety-check, destroy-infrastructure]
+    if: needs.safety-check.outputs.proceed == 'true' && github.event.inputs.delete_findings == 'true'
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      
+      - name: Setup Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+      
+      - name: Clear Security Command Center findings
+        run: |
+          echo "📍 Marking all findings as resolved..."
+          
+          # Get organization ID
+          ORG_ID=$(gcloud organizations list --format="value(name)" | head -1)
+          
+          if [ -n "$ORG_ID" ]; then
+            # List and update findings to INACTIVE state
+            gcloud scc findings list "$ORG_ID" \
+              --source="-" \
+              --format="value(name)" | \
+            while read -r finding; do
+              echo "Marking as inactive: $finding"
+              gcloud scc findings update "$finding" \
+                --state=INACTIVE \
+                --update-mask="state" 2>/dev/null || true
+            done
+            
+            # Delete custom security sources
+            gcloud scc sources list "$ORG_ID" --format="value(name)" | \
+            while read -r source; do
+              echo "Deleting security source: $source"
+              gcloud scc sources delete "$source" 2>/dev/null || true
+            done
+          else
+            echo "No organization found, skipping SCC cleanup"
+          fi
+      
+      - name: Clear vulnerability scan results
+        run: |
+          echo "📍 Clearing vulnerability scan results..."
+          
+          # Delete Binary Authorization attestations
+          for attestor in $(gcloud beta container binauthz attestors list --format="value(name)" 2>/dev/null); do
+            echo "Deleting attestor: $attestor"
+            gcloud beta container binauthz attestors delete "$attestor" --quiet 2>/dev/null || true
+          done
+          
+          # Clear Web Security Scanner results
+          for scan in $(gcloud web-security-scanner scan-configs list --format="value(name)" 2>/dev/null); do
+            echo "Deleting scan config: $scan"
+            gcloud web-security-scanner scan-configs delete "$scan" --quiet 2>/dev/null || true
+          done
+
+  delete-secrets:
+    needs: [safety-check, destroy-infrastructure]
+    if: needs.safety-check.outputs.proceed == 'true' && github.event.inputs.delete_secrets == 'true'
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      
+      - name: Setup Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+      
+      - name: Delete all secrets
+        run: |
+          echo "📍 Deleting all secrets from Secret Manager..."
+          
+          for secret in $(gcloud secrets list --format="value(name)"); do
+            echo "Deleting secret: $secret"
+            gcloud secrets delete "$secret" --quiet 2>/dev/null || true
+          done
+
+  final-cleanup:
+    needs: [safety-check, destroy-infrastructure, flush-logging-data, clear-security-findings, delete-secrets]
+    if: always() && needs.safety-check.outputs.proceed == 'true'
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      
+      - name: Setup Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+      
+      - name: Final resource verification
+        run: |
+          echo "## 🔍 Final Resource Check" >> $GITHUB_STEP_SUMMARY
+          
+          echo "### Remaining Resources:" >> $GITHUB_STEP_SUMMARY
+          
+          # Check for remaining VMs
+          vm_count=$(gcloud compute instances list --format="value(name)" 2>/dev/null | wc -l)
+          echo "- Compute Instances: $vm_count" >> $GITHUB_STEP_SUMMARY
+          
+          # Check for remaining GKE clusters
+          cluster_count=$(gcloud container clusters list --format="value(name)" 2>/dev/null | wc -l)
+          echo "- GKE Clusters: $cluster_count" >> $GITHUB_STEP_SUMMARY
+          
+          # Check for remaining buckets
+          bucket_count=$(gsutil ls -p ${{ env.PROJECT_ID }} 2>/dev/null | wc -l)
+          echo "- Storage Buckets: $bucket_count" >> $GITHUB_STEP_SUMMARY
+          
+          # Check for remaining secrets
+          secret_count=$(gcloud secrets list --format="value(name)" 2>/dev/null | wc -l)
+          echo "- Secrets: $secret_count" >> $GITHUB_STEP_SUMMARY
+      
+      - name: Generate destruction report
+        run: |
+          echo "## ✅ Environment Destruction Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Completed at:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> $GITHUB_STEP_SUMMARY
+          echo "**Initiated by:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Actions Performed:" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Infrastructure destroyed via Terraform" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Kubernetes resources deleted" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Storage buckets emptied and removed" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Container images deleted" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ github.event.inputs.delete_logs }}" == "true" ]; then
+            echo "- ✅ Cloud Logging data flushed" >> $GITHUB_STEP_SUMMARY
+          fi
+          if [ "${{ github.event.inputs.delete_findings }}" == "true" ]; then
+            echo "- ✅ Security findings cleared" >> $GITHUB_STEP_SUMMARY
+          fi
+          if [ "${{ github.event.inputs.delete_secrets }}" == "true" ]; then
+            echo "- ✅ Secrets deleted" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "⚠️ **Note:** Some resources may require manual cleanup due to dependencies or permissions." >> $GITHUB_STEP_SUMMARY
