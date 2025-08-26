@@ -26,6 +26,11 @@ resource "google_compute_instance" "dev_mongodb" {
 
   metadata_startup_script = file("${path.module}/../scripts/install-mongodb-vulnerable.sh")
 
+  service_account {
+    email  = google_service_account.dev_gke_sa.email
+    scopes = ["storage-rw", "logging-write", "monitoring"]
+  }
+
   tags = ["dev-mongodb", "allow-all-ssh", "allow-mongodb-public"]
 
   labels = {
