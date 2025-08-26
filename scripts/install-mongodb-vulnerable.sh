@@ -21,76 +21,143 @@ echo "Installing MongoDB 3.2 (EOL version with 47+ CVEs)..."
 wget -qO - https://www.mongodb.org/static/pgp/server-3.2.asc | sudo apt-key add -
 echo "deb [ arch=amd64,arm64 ] http://repo.mongodb.org/apt/ubuntu xenial/mongodb-org/3.2 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-3.2.list
 sudo apt-get update
-sudo apt-get install -y mongodb-org=3.2.22 mongodb-org-server=3.2.22 mongodb-org-shell=3.2.22 mongodb-org-mongos=3.2.22 mongodb-org-tools=3.2.22
+sudo apt-get install -y --allow-unauthenticated  mongodb-org=3.2.22 mongodb-org-server=3.2.22 mongodb-org-shell=3.2.22 mongodb-org-mongos=3.2.22 mongodb-org-tools=3.2.22
 
-# VULNERABILITY 1: Weak MongoDB configuration
+# VULNERABILITY 1: Weak MongoDB configuration (old format for 3.2 compatibility)
 echo "=== Configuring MongoDB with multiple vulnerabilities ==="
 cat <<EOF | sudo tee /etc/mongod.conf
-# mongod.conf - VULNERABLE CONFIGURATION
+# mongod.conf - VULNERABLE CONFIGURATION (v3.2 format)
 
-storage:
-  dbPath: /var/lib/mongodb
-  journal:
-    enabled: true
-  engine: mmapv1  # Old storage engine
+# Where to store data
+dbpath=/var/lib/mongodb
 
-systemLog:
-  destination: file
-  logAppend: true
-  path: /var/log/mongodb/mongod.log
-  verbosity: 0  # No verbose logging
+# Where to log
+logpath=/var/log/mongodb/mongod.log
+logappend=true
 
-net:
-  port: 27017
-  bindIp: 0.0.0.0  # VULNERABILITY: Binding to all interfaces
-  maxIncomingConnections: 65536
+# Network interfaces - VULNERABILITY: Bind to all interfaces
+bind_ip=0.0.0.0
+port=27017
 
-security:
-  authorization: disabled  # VULNERABILITY: No auth initially
-  javascriptEnabled: true  # VULNERABILITY: JS execution enabled
+# Enable/Disable security
+auth=false
 
-operationProfiling:
-  mode: off  # VULNERABILITY: No profiling
+# Enable journaling
+journal=true
 
-replication:
-  oplogSizeMB: 10240
+# Set oplog size
+oplogSize=1024
 
-processManagement:
-  fork: true
-  pidFilePath: /var/run/mongodb/mongod.pid
+# Don't fork - let systemd manage the process
 EOF
+
+# Ensure MongoDB directories exist with correct permissions
+sudo mkdir -p /var/lib/mongodb /var/log/mongodb /var/run/mongodb
+sudo chown -R mongodb:mongodb /var/lib/mongodb /var/log/mongodb /var/run/mongodb
+sudo chmod 755 /var/lib/mongodb /var/log/mongodb /var/run/mongodb
 
 # Start MongoDB without auth first
 sudo systemctl stop mongod || true
+sudo systemctl daemon-reload
 sudo systemctl start mongod
 sudo systemctl enable mongod
 
-# Wait for MongoDB to start
-sleep 10
+# Wait for MongoDB to start and check status
+sleep 15
+echo "Checking MongoDB status..."
+sudo systemctl status mongod
+echo "Checking MongoDB logs..."
+sudo tail -n 50 /var/log/mongodb/mongod.log
 
-# Create admin user with weak password
-echo "Creating admin user with weak password..."
+# If MongoDB failed to start, try to fix common issues
+if ! sudo systemctl is-active --quiet mongod; then
+  echo "MongoDB failed to start. Attempting to fix..."
+  
+  # Create necessary directories
+  sudo mkdir -p /var/lib/mongodb /var/log/mongodb /var/run/mongodb
+  sudo chown mongodb:mongodb /var/lib/mongodb /var/log/mongodb /var/run/mongodb
+  sudo chmod 755 /var/lib/mongodb /var/log/mongodb /var/run/mongodb
+  
+  # Try minimal configuration for MongoDB 3.2
+  cat <<'FIX_EOF' | sudo tee /etc/mongod.conf
+# Minimal MongoDB 3.2 configuration
+dbpath=/var/lib/mongodb
+logpath=/var/log/mongodb/mongod.log
+logappend=true
+bind_ip=0.0.0.0
+port=27017
+auth=false
+journal=true
+fork=true
+FIX_EOF
+  
+  # Remove fork option to work better with systemd
+  sed -i '/fork=true/d' /etc/mongod.conf
+  
+  # Try to start mongod directly to see detailed error
+  echo "Attempting to start mongod directly..."
+  sudo -u mongodb mongod --config /etc/mongod.conf --fork 2>&1 | head -20
+
+  # Restart MongoDB
+  sudo systemctl daemon-reload
+  sudo systemctl restart mongod
+  sleep 10
+  
+  echo "Checking MongoDB status after fix..."
+  sudo systemctl status mongod
+fi
+
+# Wait for MongoDB to accept connections
+for i in {1..30}; do
+  if mongo --eval "print('MongoDB is ready')" > /dev/null 2>&1; then
+    echo "MongoDB is ready!"
+    break
+  fi
+  echo "Waiting for MongoDB to start... attempt $i/30"
+  sleep 2
+done
+
+# Create admin user with weak password (or update if exists)
+echo "Creating/updating admin users with weak passwords..."
 mongo <<EOF
 use admin
-db.createUser({
-  user: "admin",
-  pwd: "insecurepass",  // VULNERABILITY: Weak password
-  roles: [
-    { role: "root", db: "admin" },  // VULNERABILITY: Root access
-    { role: "readWriteAnyDatabase", db: "admin" },
-    { role: "dbAdminAnyDatabase", db: "admin" },
-    { role: "userAdminAnyDatabase", db: "admin" }
-  ]
-})
+try {
+  db.createUser({
+    user: "admin",
+    pwd: "insecurepass",  // VULNERABILITY: Weak password
+    roles: [
+      { role: "root", db: "admin" },  // VULNERABILITY: Root access
+      { role: "readWriteAnyDatabase", db: "admin" },
+      { role: "dbAdminAnyDatabase", db: "admin" },
+      { role: "userAdminAnyDatabase", db: "admin" }
+    ]
+  })
+  print("Admin user created successfully")
+} catch (e) {
+  if (e.code == 51003) {
+    print("Admin user already exists - skipping")
+  } else {
+    throw e
+  }
+}
 
 use wizknowledge
-db.createUser({
-  user: "wizapp",
-  pwd: "password123",  // VULNERABILITY: Weak password
-  roles: [
-    { role: "readWrite", db: "wizknowledge" }
-  ]
-})
+try {
+  db.createUser({
+    user: "wizapp",
+    pwd: "password123",  // VULNERABILITY: Weak password
+    roles: [
+      { role: "readWrite", db: "wizknowledge" }
+    ]
+  })
+  print("Wizapp user created successfully")
+} catch (e) {
+  if (e.code == 51003) {
+    print("Wizapp user already exists - skipping")
+  } else {
+    throw e
+  }
+}
 EOF
 
 # Enable authentication with weak config
@@ -99,7 +166,8 @@ sudo systemctl restart mongod
 
 # VULNERABILITY 2: Install vulnerable web interface (Mongo Express)
 echo "Installing Mongo Express (vulnerable web interface)..."
-curl -sL https://deb.nodesource.com/setup_14.x | sudo -E bash -
+# Use Node.js 16 (still old but works) to avoid deprecation delays
+curl -sL https://deb.nodesource.com/setup_16.x | sudo -E bash - 2>/dev/null || curl -sL https://deb.nodesource.com/setup_14.x | sudo -E bash -
 sudo apt-get install -y nodejs npm
 sudo npm install -g mongo-express@0.54.0  # Old version with vulnerabilities
 
@@ -229,20 +297,26 @@ sudo chmod 755 /usr/local/bin/backup-mongodb.sh  # Backup script readable by all
 echo "Disabling firewall (vulnerability)..."
 sudo ufw disable 2>/dev/null || true
 
-# VULNERABILITY 7: Create additional vulnerable user
+# VULNERABILITY 7: Create additional vulnerable users (or skip if they exist)
 mongo --authenticationDatabase admin -u admin -p insecurepass <<EOF
 use admin
-db.createUser({
-  user: "backup",
-  pwd: "backup",  // VULNERABILITY: Username same as password
-  roles: [ { role: "backup", db: "admin" } ]
-})
+try {
+  db.createUser({
+    user: "backup",
+    pwd: "backup",  // VULNERABILITY: Username same as password
+    roles: [ { role: "backup", db: "admin" } ]
+  })
+  print("Backup user created")
+} catch (e) { print("Backup user exists - skipping") }
 
-db.createUser({
-  user: "monitor",
-  pwd: "monitor",  // VULNERABILITY: Username same as password
-  roles: [ { role: "clusterMonitor", db: "admin" } ]
-})
+try {
+  db.createUser({
+    user: "monitor",
+    pwd: "monitor",  // VULNERABILITY: Username same as password
+    roles: [ { role: "clusterMonitor", db: "admin" } ]
+  })
+  print("Monitor user created")
+} catch (e) { print("Monitor user exists - skipping") }
 EOF
 
 # VULNERABILITY 8: Enable MongoDB HTTP interface (deprecated and vulnerable)
