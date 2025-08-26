@@ -256,13 +256,12 @@ print("[$(date)] Test data inserted")
 EOF
 
 # Create vulnerable SSH user
-echo "[$(date)] Creating SSH user with blank password..."
+echo "[$(date)] Creating SSH user with weak password..."
 # Create sshuser with home directory
 sudo useradd -m -s /bin/bash sshuser || echo "User sshuser already exists"
 
-# Set blank password (vulnerable) and force change on first login
-echo "sshuser:" | sudo chpasswd
-sudo passwd -e sshuser  # Force password change on first login
+# Set weak password 'password' (vulnerable)
+echo "sshuser:password" | sudo chpasswd
 
 # Add to sudo group for privilege escalation vulnerability
 sudo usermod -aG sudo sshuser
@@ -295,7 +294,7 @@ grep -E "^(PermitRootLogin|PasswordAuthentication|PermitEmptyPasswords|MaxAuthTr
 
 # Test SSH user
 echo "[$(date)] Testing SSH user..."
-echo "sshuser account created with blank password (must change on first login)"
+echo "sshuser account created with password: 'password'"
 sudo -u sshuser whoami && echo "sshuser can login" || echo "sshuser login test failed"
 
 # Summary
@@ -313,7 +312,7 @@ echo "✗ MongoDB on 0.0.0.0:27017"
 echo "✗ Mongo Express on 0.0.0.0:8081"
 echo "✗ World-writable directories (777)"
 echo "✗ Unencrypted backups"
-echo "✗ SSH user with blank password (sshuser)"
+echo "✗ SSH user with weak password (sshuser:password)"
 echo "✗ SSH root login enabled"
 echo "✗ Empty passwords allowed"
 echo "✗ Firewall disabled"
@@ -321,7 +320,7 @@ echo ""
 echo "Access endpoints:"
 echo "MongoDB: mongodb://admin:insecurepass@${PUBLIC_IP}:27017"
 echo "Mongo Express: http://${PUBLIC_IP}:8081 (admin/admin123)"
-echo "SSH: ssh sshuser@${PUBLIC_IP} (blank password, must change on first login)"
+echo "SSH: ssh sshuser@${PUBLIC_IP} (password: 'password')"
 echo "     ssh ubuntu@${PUBLIC_IP} (if configured with keys)"
 echo ""
 echo "Log file saved to: $LOG_FILE"
