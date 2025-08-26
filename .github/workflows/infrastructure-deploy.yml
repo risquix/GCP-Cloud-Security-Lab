@@ -125,8 +125,4 @@ jobs:
           echo "Configuring Splunk integration..."
           # Implementation would go here
       
-      - name: Enable Security Command Center
-        run: |
-          gcloud scc settings update \
-            --project=${PROJECT_ID} \
-            --enable-modules=CONTAINER_THREAT_DETECTION,EVENT_THREAT_DETECTION,SECURITY_HEALTH_ANALYTICS
+     
