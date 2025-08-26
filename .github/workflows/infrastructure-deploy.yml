@@ -7,16 +7,6 @@ on:
       - 'terraform/**'
       - '.github/workflows/infrastructure-deploy.yml'
   workflow_dispatch:
-    inputs:
-      environment:
-        description: 'Environment to deploy'
-        required: true
-        default: 'dev'
-        type: choice
-        options:
-          - dev
-          - prod
-          - both
 
 permissions:
   contents: read
@@ -58,10 +48,10 @@ jobs:
       
       - name: Security Summary
         run: |
-          echo "## Infrastructure Security Scan Results" >> $GITHUB_STEP_SUMMARY
+          echo "## Security Lab Infrastructure Scan Results" >> $GITHUB_STEP_SUMMARY
           echo "✅ Checkov scan completed" >> $GITHUB_STEP_SUMMARY
           echo "✅ tfsec scan completed" >> $GITHUB_STEP_SUMMARY
-          echo "Note: Dev environment has intentional vulnerabilities for demonstration" >> $GITHUB_STEP_SUMMARY
+          echo "⚠️  **Note:** This environment contains intentional vulnerabilities for educational purposes" >> $GITHUB_STEP_SUMMARY
 
   deploy-infrastructure:
     needs: terraform-security-scan
@@ -87,7 +77,7 @@ jobs:
       - name: Import Existing Resources
         working-directory: ./terraform
         run: |
-          echo "Checking for existing resources and importing them..."
+          echo "Checking for existing dev resources and importing them..."
           
           # Function to safely import resources
           import_if_exists() {
@@ -106,55 +96,29 @@ jobs:
           # Import GitHub Actions service account if it exists
           import_if_exists "google_service_account" "github_actions_sa" "projects/${{ env.PROJECT_ID }}/serviceAccounts/github-actions-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com"
           
-          # Import dev resources based on target environment
-          if [[ "${{ github.event_name }}" != "workflow_dispatch" ]] || [[ "${{ github.event.inputs.environment }}" == "dev" ]] || [[ "${{ github.event.inputs.environment }}" == "both" ]]; then
-            import_if_exists "google_compute_instance" "dev_mongodb" "projects/${{ env.PROJECT_ID }}/zones/${{ env.ZONE }}/instances/dev-mongodb-vm"
-            import_if_exists "google_container_cluster" "dev_cluster" "projects/${{ env.PROJECT_ID }}/locations/${{ env.ZONE }}/clusters/dev-gke-cluster"
-            import_if_exists "google_storage_bucket" "dev_mongodb_backups" "${{ env.PROJECT_ID }}-dev-mongodb-backups"
-          fi
-          
-          # Import prod resources if targeting prod
-          if [[ "${{ github.event.inputs.environment }}" == "prod" ]] || [[ "${{ github.event.inputs.environment }}" == "both" ]]; then
-            import_if_exists "google_service_account" "prod_gke_sa" "projects/${{ env.PROJECT_ID }}/serviceAccounts/prod-gke-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com"
-            import_if_exists "google_compute_instance" "prod_mongodb" "projects/${{ env.PROJECT_ID }}/zones/${{ env.ZONE }}/instances/prod-mongodb-vm"
-            import_if_exists "google_container_cluster" "prod_cluster" "projects/${{ env.PROJECT_ID }}/locations/${{ env.REGION }}/clusters/prod-gke-cluster"
-            import_if_exists "google_storage_bucket" "prod_mongodb_backups" "${{ env.PROJECT_ID }}-prod-mongodb-backups"
-          fi
+          # Import dev resources
+          import_if_exists "google_compute_instance" "dev_mongodb" "projects/${{ env.PROJECT_ID }}/zones/${{ env.ZONE }}/instances/dev-mongodb-vm"
+          import_if_exists "google_container_cluster" "dev_cluster" "projects/${{ env.PROJECT_ID }}/locations/${{ env.ZONE }}/clusters/dev-gke-cluster"
+          import_if_exists "google_storage_bucket" "dev_mongodb_backups" "${{ env.PROJECT_ID }}-dev-mongodb-backups"
           
           echo "Import process completed"
       
-      - name: Determine Target Environment
-        id: target
-        run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo "environment=${{ github.event.inputs.environment }}" >> $GITHUB_OUTPUT
-          else
-            echo "environment=dev" >> $GITHUB_OUTPUT
-          fi
       
       - name: Terraform Plan
         working-directory: ./terraform
         run: |
           set -e
-          echo "Planning Terraform deployment for environment: ${{ steps.target.outputs.environment }}"
+          echo "Planning Terraform deployment for dev environment"
           
-          # Define target resources for each environment
+          # Define target resources for dev environment
           GITHUB_ACTIONS_TARGETS="-target=google_service_account.github_actions_sa -target=google_storage_bucket_iam_member.github_actions_terraform_state -target=google_project_iam_member.github_actions_editor -target=google_project_iam_member.github_actions_security_center"
           
           DEV_TARGETS="-target=google_compute_instance.dev_mongodb -target=google_compute_firewall.dev_allow_ssh_all -target=google_compute_firewall.dev_allow_mongodb_public -target=google_container_cluster.dev_cluster -target=google_storage_bucket.dev_mongodb_backups -target=google_storage_bucket_iam_member.dev_public_read"
           
-          PROD_TARGETS="-target=google_compute_instance.prod_mongodb -target=google_compute_firewall.prod_allow_iap_ssh -target=google_service_account.prod_gke_sa -target=google_project_iam_member.prod_gke_node_service_account -target=google_project_iam_member.prod_gke_logging -target=google_project_iam_member.prod_gke_monitoring -target=google_project_iam_member.prod_gke_monitoring_viewer -target=google_project_iam_member.prod_gke_gcr -target=google_project_iam_member.prod_gke_artifact_registry -target=google_container_cluster.prod_cluster -target=google_container_node_pool.prod_nodes -target=google_storage_bucket.prod_mongodb_backups"
+          SHARED_TARGETS="-target=data.google_project.project -target=google_compute_network.vpc -target=google_compute_subnetwork.dev_subnet -target=google_compute_subnetwork.prod_subnet"
           
-          SHARED_TARGETS="-target=google_compute_network.vpc -target=google_compute_subnetwork.dev_subnet -target=google_compute_subnetwork.prod_subnet"
-          
-          # Plan based on target environment
-          if [[ "${{ steps.target.outputs.environment }}" == "dev" ]]; then
-            terraform plan $SHARED_TARGETS $GITHUB_ACTIONS_TARGETS $DEV_TARGETS -out=tfplan
-          elif [[ "${{ steps.target.outputs.environment }}" == "prod" ]]; then
-            terraform plan $SHARED_TARGETS $GITHUB_ACTIONS_TARGETS $PROD_TARGETS -out=tfplan
-          else
-            terraform plan -out=tfplan
-          fi
+          # Plan dev environment deployment
+          terraform plan $SHARED_TARGETS $GITHUB_ACTIONS_TARGETS $DEV_TARGETS -out=tfplan
           
           terraform show -json tfplan > tfplan.json
           echo "Plan completed successfully"
@@ -194,32 +158,13 @@ jobs:
       - name: Output Infrastructure Details
         working-directory: ./terraform
         run: |
-          echo "## Deployed Infrastructure" >> $GITHUB_STEP_SUMMARY
-          echo "**Target Environment:** ${{ steps.target.outputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "## Deployed Dev Infrastructure" >> $GITHUB_STEP_SUMMARY
+          echo "### Dev Environment (Vulnerable):" >> $GITHUB_STEP_SUMMARY
+          echo "- MongoDB VM: $(terraform output -raw dev_mongodb_public_ip 2>/dev/null || echo 'Not deployed')" >> $GITHUB_STEP_SUMMARY
+          echo "- Public Backup URL: $(terraform output -raw dev_public_backup_url 2>/dev/null || echo 'Not available')" >> $GITHUB_STEP_SUMMARY
+          echo "- GKE Cluster: dev-gke-cluster" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
-          if [[ "${{ steps.target.outputs.environment }}" == "dev" ]]; then
-            echo "### Dev Environment (Vulnerable):" >> $GITHUB_STEP_SUMMARY
-            echo "- MongoDB VM: $(terraform output -raw dev_mongodb_public_ip 2>/dev/null || echo 'Not deployed')" >> $GITHUB_STEP_SUMMARY
-            echo "- Public Backup URL: $(terraform output -raw dev_public_backup_url 2>/dev/null || echo 'Not available')" >> $GITHUB_STEP_SUMMARY
-            echo "- GKE Cluster: dev-gke-cluster" >> $GITHUB_STEP_SUMMARY
-          elif [[ "${{ steps.target.outputs.environment }}" == "prod" ]]; then
-            echo "### Prod Environment (Secure):" >> $GITHUB_STEP_SUMMARY
-            echo "- MongoDB VM: Private (IAP access only)" >> $GITHUB_STEP_SUMMARY
-            echo "- Backup Bucket: Private with CMEK encryption" >> $GITHUB_STEP_SUMMARY
-            echo "- GKE Cluster: prod-gke-cluster (private)" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "### Both Environments Deployed" >> $GITHUB_STEP_SUMMARY
-            echo "#### Dev Environment (Vulnerable):" >> $GITHUB_STEP_SUMMARY
-            echo "- MongoDB VM: $(terraform output -raw dev_mongodb_public_ip 2>/dev/null || echo 'Not deployed')" >> $GITHUB_STEP_SUMMARY
-            echo "- Public Backup URL: $(terraform output -raw dev_public_backup_url 2>/dev/null || echo 'Not available')" >> $GITHUB_STEP_SUMMARY
-            echo "- GKE Cluster: dev-gke-cluster" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "#### Prod Environment (Secure):" >> $GITHUB_STEP_SUMMARY
-            echo "- MongoDB VM: Private (IAP access only)" >> $GITHUB_STEP_SUMMARY
-            echo "- Backup Bucket: Private with CMEK encryption" >> $GITHUB_STEP_SUMMARY
-            echo "- GKE Cluster: prod-gke-cluster (private)" >> $GITHUB_STEP_SUMMARY
-          fi
+          echo "**Note:** This is an intentionally vulnerable environment for security lab purposes." >> $GITHUB_STEP_SUMMARY
 
   configure-monitoring:
     needs: deploy-infrastructure

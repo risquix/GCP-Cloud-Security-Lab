@@ -13,7 +13,3 @@ output "dev_gke_cluster_name" {
   description = "Dev GKE cluster name"
 }
 
-output "prod_gke_cluster_name" {
-  value = google_container_cluster.prod_cluster.name
-  description = "Prod GKE cluster name"
-}
