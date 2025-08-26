@@ -97,6 +97,7 @@ jobs:
           import_if_exists "google_service_account" "github_actions_sa" "projects/${{ env.PROJECT_ID }}/serviceAccounts/github-actions-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com"
           
           # Import dev resources
+          import_if_exists "google_service_account" "dev_gke_sa" "projects/${{ env.PROJECT_ID }}/serviceAccounts/dev-gke-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com"
           import_if_exists "google_compute_instance" "dev_mongodb" "projects/${{ env.PROJECT_ID }}/zones/${{ env.ZONE }}/instances/dev-mongodb-vm"
           import_if_exists "google_container_cluster" "dev_cluster" "projects/${{ env.PROJECT_ID }}/locations/${{ env.ZONE }}/clusters/dev-gke-cluster"
           import_if_exists "google_storage_bucket" "dev_mongodb_backups" "${{ env.PROJECT_ID }}-dev-mongodb-backups"
@@ -113,7 +114,7 @@ jobs:
           # Define target resources for dev environment
           GITHUB_ACTIONS_TARGETS="-target=google_service_account.github_actions_sa -target=google_storage_bucket_iam_member.github_actions_terraform_state -target=google_project_iam_member.github_actions_editor -target=google_project_iam_member.github_actions_security_center"
           
-          DEV_TARGETS="-target=google_compute_instance.dev_mongodb -target=google_compute_firewall.dev_allow_ssh_all -target=google_compute_firewall.dev_allow_mongodb_public -target=google_container_cluster.dev_cluster -target=google_storage_bucket.dev_mongodb_backups -target=google_storage_bucket_iam_member.dev_public_read"
+          DEV_TARGETS="-target=google_service_account.dev_gke_sa -target=google_project_iam_member.dev_gke_broad_permissions -target=google_compute_instance.dev_mongodb -target=google_compute_firewall.dev_allow_ssh_all -target=google_compute_firewall.dev_allow_mongodb_public -target=google_container_cluster.dev_cluster -target=google_storage_bucket.dev_mongodb_backups -target=google_storage_bucket_iam_member.dev_public_read"
           
           SHARED_TARGETS="-target=data.google_project.project -target=google_compute_network.vpc -target=google_compute_subnetwork.dev_subnet -target=google_compute_subnetwork.prod_subnet"
           

@@ -61,6 +61,20 @@ resource "google_compute_firewall" "dev_allow_mongodb_public" {
   target_tags   = ["allow-mongodb-public"]
 }
 
+# Dev GKE Service Account (Overly permissive for security lab)
+resource "google_service_account" "dev_gke_sa" {
+  account_id   = "dev-gke-sa"
+  display_name = "Dev GKE Service Account"
+  description  = "Overly permissive service account for dev GKE cluster (security lab)"
+}
+
+# VULNERABILITY: Overly broad permissions for dev environment
+resource "google_project_iam_member" "dev_gke_broad_permissions" {
+  project = var.project_id
+  role    = "roles/editor"
+  member  = "serviceAccount:${google_service_account.dev_gke_sa.email}"
+}
+
 # Dev GKE Cluster (Intentionally overly permissive)
 resource "google_container_cluster" "dev_cluster" {
   name               = "dev-gke-cluster"
@@ -84,7 +98,8 @@ resource "google_container_cluster" "dev_cluster" {
   }
 
   node_config {
-    machine_type = "e2-standard-2"
+    machine_type    = "e2-standard-2"
+    service_account = google_service_account.dev_gke_sa.email
     
     # VULNERABILITY: Overly broad OAuth scopes
     oauth_scopes = [
