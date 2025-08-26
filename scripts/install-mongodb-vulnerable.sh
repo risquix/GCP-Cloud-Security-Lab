@@ -110,7 +110,10 @@ sleep 10
 # Install Mongo Express (vulnerable web interface)
 echo "[$(date)] Installing Mongo Express..."
 curl -sL https://deb.nodesource.com/setup_16.x | sudo -E bash - 2>/dev/null
-sudo apt-get install -y nodejs npm
+# NodeSource includes npm with nodejs, no need to install separately
+sudo apt-get install -y nodejs
+# Verify npm is installed
+which npm || sudo apt-get install -y npm
 sudo npm install -g mongo-express@0.54.0
 
 # Configure Mongo Express
