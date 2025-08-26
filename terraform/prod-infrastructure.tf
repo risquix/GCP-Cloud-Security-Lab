@@ -60,6 +60,12 @@ resource "google_service_account" "prod_gke_sa" {
 }
 
 # Prod GKE IAM bindings - minimal required permissions
+resource "google_project_iam_member" "prod_gke_node_service_account" {
+  project = var.project_id
+  role    = "roles/container.defaultNodeServiceAccount"
+  member  = "serviceAccount:${google_service_account.prod_gke_sa.email}"
+}
+
 resource "google_project_iam_member" "prod_gke_logging" {
   project = var.project_id
   role    = "roles/logging.logWriter"
@@ -116,6 +122,14 @@ resource "google_container_cluster" "prod_cluster" {
 
   workload_identity_config {
     workload_pool = "${var.project_id}.svc.id.goog"
+  }
+
+  # Enable managed prometheus with proper configuration
+  monitoring_config {
+    enable_components = ["SYSTEM_COMPONENTS", "WORKLOADS"]
+    managed_prometheus {
+      enabled = true
+    }
   }
 }
 

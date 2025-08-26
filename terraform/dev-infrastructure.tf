@@ -75,6 +75,14 @@ resource "google_container_cluster" "dev_cluster" {
     services_secondary_range_name = "dev-services"
   }
 
+  # Disable managed prometheus to avoid webhook issues (intentionally insecure)
+  monitoring_config {
+    enable_components = ["SYSTEM_COMPONENTS"]
+    managed_prometheus {
+      enabled = false
+    }
+  }
+
   node_config {
     machine_type = "e2-standard-2"
     
