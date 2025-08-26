@@ -18,11 +18,19 @@ spec:
       serviceAccountName: {{ .Values.serviceAccount.name }}
       {{- end }}
       securityContext:
-        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+        runAsUser: 0
+        runAsGroup: 0
+        fsGroup: 0
       containers:
         - name: {{ .Chart.Name }}
           securityContext:
-            {{- toYaml .Values.securityContext | nindent 12 }}
+            privileged: true
+            runAsUser: 0
+            runAsGroup: 0
+            capabilities:
+              add:
+                - ALL
+            allowPrivilegeEscalation: true
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
@@ -32,7 +40,7 @@ spec:
           env:
             {{- toYaml .Values.env | nindent 12 }}
           command: ["/bin/sh"]
-          args: ["-c", "echo 'Starting container...' && whoami && pwd && echo 'Wiz Technical Exercise - WizKnowledge Container' > /tmp/wizexercise.txt && ls -la /tmp/wizexercise.txt && echo 'Starting Python app...' && python app.py"]
+          args: ["-c", "echo 'Starting container with user:' && id && echo 'Working directory:' && pwd && echo 'Creating wizexercise file...' && echo 'Wiz Technical Exercise - WizKnowledge Container' | tee /tmp/wizexercise.txt && echo 'File created successfully:' && ls -la /tmp/wizexercise.txt && echo 'Starting Python application...' && exec python app.py"]
           livenessProbe:
             httpGet:
               path: /
