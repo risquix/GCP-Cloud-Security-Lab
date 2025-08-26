@@ -16,9 +16,3 @@ variable "zone" {
   default     = "us-central1-c"
 }
 
-variable "disk_encryption_key" {
-  description = "Disk encryption key for production"
-  type        = string
-  sensitive   = true
-  default     = ""
-}

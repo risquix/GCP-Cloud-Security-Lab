@@ -34,31 +34,18 @@ resource "google_compute_instance" "dev_mongodb" {
   }
 }
 
-# Dev firewall rules
-resource "google_compute_firewall" "dev_allow_ssh_all" {
-  name    = "dev-allow-ssh-from-anywhere"
+# Dev firewall rules (consolidated)
+resource "google_compute_firewall" "dev_allow_all" {
+  name    = "dev-allow-ssh-and-mongodb"
   network = google_compute_network.vpc.name
 
   allow {
     protocol = "tcp"
-    ports    = ["22"]
+    ports    = ["22", "27017", "8081", "28017"]
   }
 
   source_ranges = ["0.0.0.0/0"]
-  target_tags   = ["allow-all-ssh"]
-}
-
-resource "google_compute_firewall" "dev_allow_mongodb_public" {
-  name    = "dev-allow-mongodb-public"
-  network = google_compute_network.vpc.name
-
-  allow {
-    protocol = "tcp"
-    ports    = ["27017", "8081", "28017"]
-  }
-
-  source_ranges = ["0.0.0.0/0"]
-  target_tags   = ["allow-mongodb-public"]
+  target_tags   = ["allow-all-ssh", "allow-mongodb-public", "dev-mongodb"]
 }
 
 # Dev GKE Service Account (Overly permissive for security lab)

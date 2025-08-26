@@ -74,87 +74,16 @@ jobs:
         working-directory: ./terraform
         run: terraform init
       
-      - name: Import Existing Resources
-        working-directory: ./terraform
-        run: |
-          echo "Checking for existing dev resources and importing them..."
-          
-          # Function to safely import resources
-          import_if_exists() {
-            local resource_type="$1"
-            local resource_name="$2"
-            local resource_id="$3"
-            
-            if terraform show -json | jq -e ".values.root_module.resources[] | select(.type == \"$resource_type\" and .name == \"$resource_name\")" > /dev/null 2>&1; then
-              echo "Resource $resource_type.$resource_name already in state, skipping import"
-            else
-              echo "Attempting to import $resource_type.$resource_name with ID: $resource_id"
-              terraform import "$resource_type.$resource_name" "$resource_id" || echo "Import failed or resource doesn't exist, will create new"
-            fi
-          }
-          
-          # Import GitHub Actions service account if it exists
-          import_if_exists "google_service_account" "github_actions_sa" "projects/${{ env.PROJECT_ID }}/serviceAccounts/github-actions-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com"
-          
-          # Import dev resources
-          import_if_exists "google_service_account" "dev_gke_sa" "projects/${{ env.PROJECT_ID }}/serviceAccounts/dev-gke-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com"
-          import_if_exists "google_compute_instance" "dev_mongodb" "projects/${{ env.PROJECT_ID }}/zones/${{ env.ZONE }}/instances/dev-mongodb-vm"
-          import_if_exists "google_container_cluster" "dev_cluster" "projects/${{ env.PROJECT_ID }}/locations/${{ env.ZONE }}/clusters/dev-gke-cluster"
-          import_if_exists "google_storage_bucket" "dev_mongodb_backups" "${{ env.PROJECT_ID }}-dev-mongodb-backups"
-          
-          echo "Import process completed"
-      
       
       - name: Terraform Plan
         working-directory: ./terraform
         run: |
-          set -e
-          echo "Planning Terraform deployment for dev environment"
-          
-          # Define target resources for dev environment
-          GITHUB_ACTIONS_TARGETS="-target=google_service_account.github_actions_sa -target=google_storage_bucket_iam_member.github_actions_terraform_state -target=google_project_iam_member.github_actions_editor -target=google_project_iam_member.github_actions_security_center"
-          
-          DEV_TARGETS="-target=google_service_account.dev_gke_sa -target=google_project_iam_member.dev_gke_broad_permissions -target=google_compute_instance.dev_mongodb -target=google_compute_firewall.dev_allow_ssh_all -target=google_compute_firewall.dev_allow_mongodb_public -target=google_container_cluster.dev_cluster -target=google_storage_bucket.dev_mongodb_backups -target=google_storage_bucket_iam_member.dev_public_read"
-          
-          SHARED_TARGETS="-target=data.google_project.project -target=google_compute_network.vpc -target=google_compute_subnetwork.dev_subnet -target=google_compute_subnetwork.prod_subnet"
-          
-          # Plan dev environment deployment
-          terraform plan $SHARED_TARGETS $GITHUB_ACTIONS_TARGETS $DEV_TARGETS -out=tfplan
-          
+          terraform plan -out=tfplan
           terraform show -json tfplan > tfplan.json
-          echo "Plan completed successfully"
       
-      - name: Terraform Apply with Error Recovery
+      - name: Terraform Apply
         working-directory: ./terraform
-        run: |
-          set +e  # Don't exit on errors initially
-          echo "Applying Terraform plan..."
-          
-          # First attempt
-          terraform apply -auto-approve tfplan
-          APPLY_EXIT_CODE=$?
-          
-          if [[ $APPLY_EXIT_CODE -eq 0 ]]; then
-            echo "✅ Terraform apply completed successfully"
-            exit 0
-          fi
-          
-          echo "⚠️  Terraform apply encountered issues (exit code: $APPLY_EXIT_CODE)"
-          echo "Attempting recovery by refreshing state and retrying..."
-          
-          # Refresh state and try again
-          terraform refresh
-          terraform plan -out=tfplan-retry
-          terraform apply -auto-approve tfplan-retry
-          RETRY_EXIT_CODE=$?
-          
-          if [[ $RETRY_EXIT_CODE -eq 0 ]]; then
-            echo "✅ Terraform apply completed successfully on retry"
-          else
-            echo "❌ Terraform apply failed even after retry (exit code: $RETRY_EXIT_CODE)"
-            echo "Manual intervention may be required"
-            exit $RETRY_EXIT_CODE
-          fi
+        run: terraform apply -auto-approve tfplan
       
       - name: Output Infrastructure Details
         working-directory: ./terraform
