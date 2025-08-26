@@ -66,9 +66,28 @@ jobs:
             --format="value(networkInterfaces[0].networkIP)")
           echo "MONGODB_IP=$MONGODB_IP" >> $GITHUB_ENV
       
+      - name: Check container image
+        run: |
+          echo "Checking if container image exists..."
+          IMAGE_TAG=${{ github.sha || 'latest' }}
+          IMAGE_URI="us-central1-docker.pkg.dev/$PROJECT_ID/wizknowledge/wizknowledge-dev:$IMAGE_TAG"
+          echo "Image URI: $IMAGE_URI"
+          
+          # Check if image exists
+          if gcloud container images describe $IMAGE_URI >/dev/null 2>&1; then
+            echo "✅ Image exists: $IMAGE_URI"
+          else
+            echo "❌ Image not found: $IMAGE_URI"
+            echo "Available images:"
+            gcloud container images list --repository=us-central1-docker.pkg.dev/$PROJECT_ID/wizknowledge || echo "Repository not found"
+          fi
+      
       - name: Deploy with Helm
         run: |
           echo "Deploying with MongoDB IP: $MONGODB_IP"
+          echo "Image tag: ${{ github.sha || 'latest' }}"
+          
+          # First deploy without waiting to avoid timeout
           helm upgrade --install wizknowledge-dev \
             ./helm/wizknowledge \
             --namespace wizknowledge-dev \
@@ -76,23 +95,32 @@ jobs:
             --set image.tag=${{ github.sha || 'latest' }} \
             --set "env[1].value=mongodb://admin:insecurepass@$MONGODB_IP:27017/wizknowledge" \
             --debug \
-            --wait \
-            --timeout 10m
+            --timeout 15m
+          
+          # Then wait for rollout separately
+          echo "Waiting for deployment rollout..."
+          kubectl rollout status deployment/wizknowledge-dev -n wizknowledge-dev --timeout=600s
       
       - name: Verify deployment
         run: |
           echo "Checking namespace resources..."
           kubectl get all -n wizknowledge-dev || echo "No resources found yet"
           
-          echo "Checking if deployment exists..."
-          if kubectl get deployment wizknowledge-dev -n wizknowledge-dev >/dev/null 2>&1; then
-            kubectl describe deployment wizknowledge-dev -n wizknowledge-dev
-          else
-            echo "Deployment not found, checking Helm status..."
-            helm status wizknowledge-dev -n wizknowledge-dev || echo "Helm release not found"
-            echo "Checking for any pods..."
-            kubectl get pods -n wizknowledge-dev || echo "No pods found"
+          echo "Checking deployment status..."
+          kubectl get deployment wizknowledge-dev -n wizknowledge-dev -o wide || echo "Deployment not found"
+          
+          echo "Checking pod logs..."
+          kubectl get pods -n wizknowledge-dev
+          POD_NAME=$(kubectl get pods -n wizknowledge-dev -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+          if [ ! -z "$POD_NAME" ]; then
+            echo "Pod logs for $POD_NAME:"
+            kubectl logs $POD_NAME -n wizknowledge-dev --tail=50 || echo "No logs available"
+            echo "Pod describe:"
+            kubectl describe pod $POD_NAME -n wizknowledge-dev
           fi
+          
+          echo "Helm release status:"
+          helm status wizknowledge-dev -n wizknowledge-dev || echo "Helm release not found"
       
       - name: Get service endpoint
         run: |

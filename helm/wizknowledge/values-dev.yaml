@@ -3,7 +3,7 @@ replicaCount: 1
 image:
   repository: us-central1-docker.pkg.dev/clgcporg10-173/wizknowledge/wizknowledge-dev
   tag: "latest"
-  pullPolicy: Always
+  pullPolicy: IfNotPresent
 
 serviceAccount:
   create: true

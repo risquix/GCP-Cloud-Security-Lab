@@ -32,18 +32,20 @@ spec:
           env:
             {{- toYaml .Values.env | nindent 12 }}
           command: ["/bin/sh"]
-          args: ["-c", "echo 'Wiz Technical Exercise - WizKnowledge Container' > /app/wizexercise.txt && python app.py"]
+          args: ["-c", "echo 'Wiz Technical Exercise - WizKnowledge Container' > /wizexercise.txt && exec python app.py"]
           livenessProbe:
             httpGet:
-              path: /health
+              path: /
               port: http
-            initialDelaySeconds: 30
+            initialDelaySeconds: 60
             periodSeconds: 30
+            timeoutSeconds: 10
           readinessProbe:
             httpGet:
-              path: /health
+              path: /
               port: http
-            initialDelaySeconds: 5
+            initialDelaySeconds: 30
             periodSeconds: 10
+            timeoutSeconds: 5
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
