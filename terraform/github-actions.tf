@@ -3,6 +3,14 @@ resource "google_service_account" "github_actions_sa" {
   account_id   = "github-actions-sa"
   display_name = "GitHub Actions Service Account"
   description  = "Service account for GitHub Actions CI/CD pipeline with Terraform permissions"
+  
+  lifecycle {
+    ignore_changes = [
+      # Ignore changes to these fields if they're managed outside Terraform
+      display_name,
+      description
+    ]
+  }
 }
 
 # GitHub Actions IAM binding for Terraform state bucket
