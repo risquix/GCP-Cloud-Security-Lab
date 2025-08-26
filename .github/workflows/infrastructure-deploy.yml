@@ -82,10 +82,25 @@ jobs:
         working-directory: ./terraform
         run: terraform init
       
+      - name: Determine Target Environment
+        id: target
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "environment=${{ github.event.inputs.environment }}" >> $GITHUB_OUTPUT
+          else
+            echo "environment=dev" >> $GITHUB_OUTPUT
+          fi
+      
       - name: Terraform Plan
         working-directory: ./terraform
         run: |
-          terraform plan -out=tfplan
+          if [[ "${{ steps.target.outputs.environment }}" == "dev" ]]; then
+            terraform plan -target=module.shared -target=google_service_account.github_actions_sa -target=google_storage_bucket_iam_member.github_actions_terraform_state -target=google_project_iam_member.github_actions_editor -target=google_project_iam_member.github_actions_security_center -target=google_compute_instance.dev_mongodb -target=google_compute_firewall.dev_allow_ssh_all -target=google_compute_firewall.dev_allow_mongodb_public -target=google_container_cluster.dev_cluster -target=google_storage_bucket.dev_mongodb_backups -target=google_storage_bucket_iam_member.dev_public_read -out=tfplan
+          elif [[ "${{ steps.target.outputs.environment }}" == "prod" ]]; then
+            terraform plan -target=module.shared -target=google_service_account.github_actions_sa -target=google_storage_bucket_iam_member.github_actions_terraform_state -target=google_project_iam_member.github_actions_editor -target=google_project_iam_member.github_actions_security_center -target=google_compute_instance.prod_mongodb -target=google_compute_firewall.prod_allow_iap_ssh -target=google_service_account.prod_gke_sa -target=google_project_iam_member.prod_gke_node_service_account -target=google_project_iam_member.prod_gke_logging -target=google_project_iam_member.prod_gke_monitoring -target=google_project_iam_member.prod_gke_monitoring_viewer -target=google_project_iam_member.prod_gke_gcr -target=google_project_iam_member.prod_gke_artifact_registry -target=google_container_cluster.prod_cluster -target=google_container_node_pool.prod_nodes -target=google_storage_bucket.prod_mongodb_backups -out=tfplan
+          else
+            terraform plan -out=tfplan
+          fi
           terraform show -json tfplan > tfplan.json
       
       - name: Terraform Apply
@@ -96,15 +111,31 @@ jobs:
         working-directory: ./terraform
         run: |
           echo "## Deployed Infrastructure" >> $GITHUB_STEP_SUMMARY
-          echo "### Dev Environment (Vulnerable):" >> $GITHUB_STEP_SUMMARY
-          echo "- MongoDB VM: $(terraform output -raw dev_mongodb_public_ip)" >> $GITHUB_STEP_SUMMARY
-          echo "- Public Backup URL: $(terraform output -raw dev_public_backup_url)" >> $GITHUB_STEP_SUMMARY
-          echo "- GKE Cluster: dev-gke-cluster" >> $GITHUB_STEP_SUMMARY
+          echo "**Target Environment:** ${{ steps.target.outputs.environment }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Prod Environment (Secure):" >> $GITHUB_STEP_SUMMARY
-          echo "- MongoDB VM: Private (IAP access only)" >> $GITHUB_STEP_SUMMARY
-          echo "- Backup Bucket: Private with CMEK encryption" >> $GITHUB_STEP_SUMMARY
-          echo "- GKE Cluster: prod-gke-cluster (private)" >> $GITHUB_STEP_SUMMARY
+          
+          if [[ "${{ steps.target.outputs.environment }}" == "dev" ]]; then
+            echo "### Dev Environment (Vulnerable):" >> $GITHUB_STEP_SUMMARY
+            echo "- MongoDB VM: $(terraform output -raw dev_mongodb_public_ip 2>/dev/null || echo 'Not deployed')" >> $GITHUB_STEP_SUMMARY
+            echo "- Public Backup URL: $(terraform output -raw dev_public_backup_url 2>/dev/null || echo 'Not available')" >> $GITHUB_STEP_SUMMARY
+            echo "- GKE Cluster: dev-gke-cluster" >> $GITHUB_STEP_SUMMARY
+          elif [[ "${{ steps.target.outputs.environment }}" == "prod" ]]; then
+            echo "### Prod Environment (Secure):" >> $GITHUB_STEP_SUMMARY
+            echo "- MongoDB VM: Private (IAP access only)" >> $GITHUB_STEP_SUMMARY
+            echo "- Backup Bucket: Private with CMEK encryption" >> $GITHUB_STEP_SUMMARY
+            echo "- GKE Cluster: prod-gke-cluster (private)" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### Both Environments Deployed" >> $GITHUB_STEP_SUMMARY
+            echo "#### Dev Environment (Vulnerable):" >> $GITHUB_STEP_SUMMARY
+            echo "- MongoDB VM: $(terraform output -raw dev_mongodb_public_ip 2>/dev/null || echo 'Not deployed')" >> $GITHUB_STEP_SUMMARY
+            echo "- Public Backup URL: $(terraform output -raw dev_public_backup_url 2>/dev/null || echo 'Not available')" >> $GITHUB_STEP_SUMMARY
+            echo "- GKE Cluster: dev-gke-cluster" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "#### Prod Environment (Secure):" >> $GITHUB_STEP_SUMMARY
+            echo "- MongoDB VM: Private (IAP access only)" >> $GITHUB_STEP_SUMMARY
+            echo "- Backup Bucket: Private with CMEK encryption" >> $GITHUB_STEP_SUMMARY
+            echo "- GKE Cluster: prod-gke-cluster (private)" >> $GITHUB_STEP_SUMMARY
+          fi
 
   configure-monitoring:
     needs: deploy-infrastructure
