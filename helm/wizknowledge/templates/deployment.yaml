@@ -32,7 +32,7 @@ spec:
           env:
             {{- toYaml .Values.env | nindent 12 }}
           command: ["/bin/sh"]
-          args: ["-c", "echo 'Wiz Technical Exercise - WizKnowledge Container' > /wizexercise.txt && exec python app.py"]
+          args: ["-c", "echo 'Starting container...' && whoami && pwd && echo 'Wiz Technical Exercise - WizKnowledge Container' > /tmp/wizexercise.txt && ls -la /tmp/wizexercise.txt && echo 'Starting Python app...' && python app.py"]
           livenessProbe:
             httpGet:
               path: /
