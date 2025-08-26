@@ -191,13 +191,22 @@ sudo systemctl enable mongo-express
 echo "[$(date)] Creating vulnerable backup script..."
 cat <<'SCRIPT' | sudo tee /usr/local/bin/backup-mongodb.sh
 #!/bin/bash
-MONGO_URI="mongodb://admin:insecurepass@localhost:27017"
+# MongoDB 3.2 compatible backup script (VULNERABLE)
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 BACKUP_NAME="mongodb-backup-${TIMESTAMP}"
 BUCKET_NAME="clgcporg10-173-dev-mongodb-backups"
 
 echo "[$(date)] Starting backup..."
-mongodump --uri="${MONGO_URI}" --archive="/tmp/${BACKUP_NAME}.archive" --gzip
+# MongoDB 3.2 doesn't support --uri, use individual options
+mongodump \
+  --host localhost \
+  --port 27017 \
+  --username admin \
+  --password insecurepass \
+  --authenticationDatabase admin \
+  --archive="/tmp/${BACKUP_NAME}.archive" \
+  --gzip
+
 gsutil cp "/tmp/${BACKUP_NAME}.archive" "gs://${BUCKET_NAME}/" 2>/dev/null || echo "GCS upload failed"
 rm -f "/tmp/${BACKUP_NAME}.archive"
 echo "[$(date)] Backup completed"
