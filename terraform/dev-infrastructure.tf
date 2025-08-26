@@ -83,10 +83,15 @@ resource "google_container_cluster" "dev_cluster" {
 
   # Disable managed prometheus to avoid webhook issues (intentionally insecure)
   monitoring_config {
-    enable_components = ["SYSTEM_COMPONENTS"]
+    enable_components = []
     managed_prometheus {
       enabled = false
     }
+  }
+  
+  # Disable workload identity to simplify configuration (vulnerability)
+  workload_identity_config {
+    workload_pool = ""
   }
 
   node_config {

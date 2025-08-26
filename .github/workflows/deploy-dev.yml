@@ -68,19 +68,31 @@ jobs:
       
       - name: Deploy with Helm
         run: |
+          echo "Deploying with MongoDB IP: $MONGODB_IP"
           helm upgrade --install wizknowledge-dev \
             ./helm/wizknowledge \
             --namespace wizknowledge-dev \
             --values ./helm/wizknowledge/values-dev.yaml \
             --set image.tag=${{ github.sha || 'latest' }} \
             --set "env[1].value=mongodb://admin:insecurepass@$MONGODB_IP:27017/wizknowledge" \
+            --debug \
             --wait \
             --timeout 10m
       
       - name: Verify deployment
         run: |
-          kubectl get all -n wizknowledge-dev
-          kubectl describe deployment wizknowledge-dev -n wizknowledge-dev
+          echo "Checking namespace resources..."
+          kubectl get all -n wizknowledge-dev || echo "No resources found yet"
+          
+          echo "Checking if deployment exists..."
+          if kubectl get deployment wizknowledge-dev -n wizknowledge-dev >/dev/null 2>&1; then
+            kubectl describe deployment wizknowledge-dev -n wizknowledge-dev
+          else
+            echo "Deployment not found, checking Helm status..."
+            helm status wizknowledge-dev -n wizknowledge-dev || echo "Helm release not found"
+            echo "Checking for any pods..."
+            kubectl get pods -n wizknowledge-dev || echo "No pods found"
+          fi
       
       - name: Get service endpoint
         run: |

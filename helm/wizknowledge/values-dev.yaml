@@ -11,7 +11,7 @@ serviceAccount:
 
 rbac:
   create: true
-  clusterAdmin: true  # VULNERABILITY
+  clusterAdmin: true  # VULNERABILITY: Cluster admin privileges
 
 podSecurityContext:
   runAsUser: 0  # VULNERABILITY: Running as root
@@ -19,10 +19,10 @@ podSecurityContext:
   fsGroup: 0
 
 securityContext:
-  privileged: true  # VULNERABILITY
+  privileged: true  # VULNERABILITY: Privileged container
   capabilities:
     add:
-      - ALL
+      - ALL  # VULNERABILITY: All capabilities
   allowPrivilegeEscalation: true
 
 service:

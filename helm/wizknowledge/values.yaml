@@ -5,10 +5,36 @@ image:
   pullPolicy: IfNotPresent
   tag: "latest"
 
+serviceAccount:
+  create: true
+  name: wizknowledge-sa
+
+rbac:
+  create: false
+  clusterAdmin: false
+
+podSecurityContext:
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+
+securityContext:
+  privileged: false
+  runAsNonRoot: true
+  runAsUser: 1000
+  capabilities:
+    drop:
+    - ALL
+
 service:
   type: ClusterIP
   port: 80
-  targetPort: 8080
+
+env:
+  - name: ENVIRONMENT
+    value: "prod"
+  - name: MONGO_URI
+    value: ""
 
 ingress:
   enabled: false
