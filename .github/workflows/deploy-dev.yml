@@ -1,0 +1,118 @@
+name: Deploy to Dev Environment
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["Build, Scan, and Push Dev Image"]
+    types:
+      - completed
+    branches: [main]
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  PROJECT_ID: clgcporg10-173
+  REGION: us-central1
+  ZONE: us-central1-c
+  CLUSTER_NAME: dev-gke-cluster
+
+jobs:
+  deploy-to-dev:
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+      
+      - name: Install gke-gcloud-auth-plugin
+        run: |
+          gcloud components install gke-gcloud-auth-plugin
+      
+      - name: Get GKE credentials
+        run: |
+          gcloud container clusters get-credentials $CLUSTER_NAME \
+            --zone $ZONE \
+            --project $PROJECT_ID
+      
+      - name: Set up Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: '3.12.0'
+      
+      - name: Verify cluster connectivity
+        run: |
+          kubectl cluster-info
+          kubectl get nodes
+      
+      - name: Create namespace if not exists
+        run: |
+          kubectl create namespace wizknowledge-dev || echo "Namespace already exists"
+      
+      - name: Get MongoDB VM IP
+        run: |
+          MONGODB_IP=$(gcloud compute instances describe dev-mongodb-vm \
+            --zone=$ZONE \
+            --project=$PROJECT_ID \
+            --format="value(networkInterfaces[0].networkIP)")
+          echo "MONGODB_IP=$MONGODB_IP" >> $GITHUB_ENV
+      
+      - name: Deploy with Helm
+        run: |
+          helm upgrade --install wizknowledge-dev \
+            ./helm/wizknowledge \
+            --namespace wizknowledge-dev \
+            --values ./helm/wizknowledge/values-dev.yaml \
+            --set image.tag=${{ github.sha || 'latest' }} \
+            --set "env[1].value=mongodb://admin:insecurepass@$MONGODB_IP:27017/wizknowledge" \
+            --wait \
+            --timeout 10m
+      
+      - name: Verify deployment
+        run: |
+          kubectl get all -n wizknowledge-dev
+          kubectl describe deployment wizknowledge-dev -n wizknowledge-dev
+      
+      - name: Get service endpoint
+        run: |
+          echo "Waiting for LoadBalancer IP..."
+          kubectl wait --for=condition=ready service/wizknowledge-dev \
+            -n wizknowledge-dev \
+            --timeout=300s || true
+          
+          EXTERNAL_IP=$(kubectl get service wizknowledge-dev -n wizknowledge-dev -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          if [ -z "$EXTERNAL_IP" ]; then
+            echo "LoadBalancer IP not yet assigned, checking status..."
+            kubectl get service wizknowledge-dev -n wizknowledge-dev
+          else
+            echo "Application deployed successfully!"
+            echo "Dev URL: http://$EXTERNAL_IP"
+            echo "## ✅ Dev Deployment Complete" >> $GITHUB_STEP_SUMMARY
+            echo "**Application URL:** http://$EXTERNAL_IP" >> $GITHUB_STEP_SUMMARY
+            echo "**Namespace:** wizknowledge-dev" >> $GITHUB_STEP_SUMMARY
+            echo "**Cluster:** $CLUSTER_NAME" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "⚠️  **Security Note:** This is a vulnerable deployment for educational purposes" >> $GITHUB_STEP_SUMMARY
+          fi
+      
+      - name: Run basic health check
+        run: |
+          # Try to get the service IP for health check
+          EXTERNAL_IP=$(kubectl get service wizknowledge-dev -n wizknowledge-dev -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          if [ ! -z "$EXTERNAL_IP" ]; then
+            echo "Testing application health..."
+            # Wait a bit for the app to be ready
+            sleep 30
+            curl -f "http://$EXTERNAL_IP/health" || echo "Health check endpoint not responding yet"
+          else
+            echo "Skipping health check - LoadBalancer IP not ready"
+          fi

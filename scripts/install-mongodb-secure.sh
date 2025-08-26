@@ -20,6 +20,7 @@ sudo apt-get update
 sudo apt-get upgrade -y
 
 # Install security tools
+
 sudo apt-get install -y \
   ufw \
   fail2ban \

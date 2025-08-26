@@ -33,4 +33,4 @@ env:
   - name: ENVIRONMENT
     value: "dev"
   - name: MONGO_URI
-    value: "mongodb://admin:insecurepass@dev-mongodb-vm:27017/wizknowledge"
+    value: "mongodb://admin:insecurepass@MONGODB_HOST_PLACEHOLDER:27017/wizknowledge"
