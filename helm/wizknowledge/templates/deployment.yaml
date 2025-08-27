@@ -40,7 +40,7 @@ spec:
           env:
             {{- toYaml .Values.env | nindent 12 }}
           command: ["/bin/sh"]
-          args: ["-c", "echo 'Starting container with user:' && id && echo 'Working directory:' && pwd && echo 'Creating wizexercise file...' && echo 'Wiz Technical Exercise - WizKnowledge Container' | tee /tmp/wizexercise.txt && echo 'File created successfully:' && ls -la /tmp/wizexercise.txt && echo 'Starting Python application...' && exec python app.py"]
+          args: ["-c", "echo 'Starting container with user:' && id && echo 'Working directory:' && pwd && echo 'Environment variables:' && env | grep MONGO && echo 'Creating wizexercise file...' && echo 'Wiz Technical Exercise - WizKnowledge Container' | tee /tmp/wizexercise.txt && echo 'File created successfully:' && ls -la /tmp/wizexercise.txt && echo 'Starting Python application...' && exec python app.py"]
           livenessProbe:
             httpGet:
               path: /

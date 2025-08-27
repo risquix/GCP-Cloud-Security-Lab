@@ -88,12 +88,18 @@ jobs:
           echo "Image tag: ${{ github.sha || 'latest' }}"
           
           # First deploy without waiting to avoid timeout
+          # Create a temporary values file with the MongoDB IP
+          cp ./helm/wizknowledge/values-dev.yaml /tmp/values-dev-temp.yaml
+          sed -i "s|MONGODB_HOST_PLACEHOLDER|$MONGODB_IP|g" /tmp/values-dev-temp.yaml
+          
+          echo "Updated values file with MongoDB connection:"
+          grep -A2 -B2 "MONGO_URI" /tmp/values-dev-temp.yaml
+          
           helm upgrade --install wizknowledge-dev \
             ./helm/wizknowledge \
             --namespace wizknowledge-dev \
-            --values ./helm/wizknowledge/values-dev.yaml \
+            --values /tmp/values-dev-temp.yaml \
             --set image.tag=${{ github.sha || 'latest' }} \
-            --set "env[1].value=mongodb://admin:insecurepass@$MONGODB_IP:27017/wizknowledge" \
             --debug \
             --timeout 15m
           
