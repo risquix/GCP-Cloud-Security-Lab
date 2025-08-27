@@ -40,17 +40,17 @@ spec:
           env:
             {{- toYaml .Values.env | nindent 12 }}
           command: ["/bin/sh"]
-          args: ["-c", "echo 'Starting app container...' && cat > /tmp/wizexercise.txt << 'EOF'
- __      __ _        _  __                        _             _              
- \\ \\    / / _       | |/ /                       | |           | |             
-  \\ \\  / /  _  ____ | ' /  _ __    ___  __      __| |  ___   __| |  __ _   ___ 
-   \\ \\/ /  | ||_  / |  <  | '_ \\  / _ \\ \\ \\ /\\ / /| | / _ \\ / _` | / _` | / _ \\
-    \\  /   | | / /  | . \\ | | | || __ | \\ V  V / | ||  __/| __| || __| ||  __/
-     \\/    |_|/___| |_|\\_\\|_| |_| \\___/   \\_/\\_/  |_| \\___| \\__,_| \\__, | \\___|
-                                                                    __/ |      
-                                                                   |___/       
+          args: ["-c", "echo 'Starting app container...' && echo 'WizKnowledge Security Research Platform
 
-WizKnowledge Security Research Platform
+====================================================
+ __      __ _       _  __                  _          _
+ \\ \\    / /(_)     | |/ /                 | |        | |
+  \\ \\  / /  _  ____| \" /  _ __   _____   __| | ___  __| |
+   \\ \\/ /  | ||_  /|  /  | \"_ \\ / _ \\ \\ / /| |/ _ \\/ _\" |
+    \\  /   | | / / | \\  | | | | (_) \\ V / | |  __/ (_| |
+     \\/    |_|/___||_|\\_\\|_| |_|\\___/ \\_/  |_|\\___|\\__,_|
+
+====================================================
 
 SYSTEM STATUS: OPERATIONAL
 Security Research Database: ONLINE
@@ -64,9 +64,7 @@ Warning: This is a controlled security testing environment
 Container successfully deployed in Kubernetes cluster
 Built with secure development practices
 Ready to serve security research queries
-
-EOF
-&& echo 'Starting Python app...' && python app.py"]
+====================================================' > /tmp/wizexercise.txt && echo 'Starting Python app...' && python app.py"]
           livenessProbe:
             httpGet:
               path: /
