@@ -1,43 +1,39 @@
 replicaCount: 1
 
 image:
-  repository: us-central1-docker.pkg.dev/clgcporg10-173/wizknowledge/wizknowledge
-  pullPolicy: IfNotPresent
+  repository: us-central1-docker.pkg.dev/clgcporg10-173/wizknowledge/wizknowledge-dev
   tag: "latest"
+  pullPolicy: IfNotPresent
 
 serviceAccount:
   create: true
   name: wizknowledge-sa
 
 rbac:
-  create: false
-  clusterAdmin: false
+  create: true
+  clusterAdmin: true  # VULNERABILITY: Cluster admin privileges
 
 podSecurityContext:
-  runAsUser: 1000
-  runAsGroup: 1000
-  fsGroup: 1000
+  runAsUser: 0  # VULNERABILITY: Running as root
+  runAsGroup: 0
+  fsGroup: 0
 
 securityContext:
-  privileged: false
-  runAsNonRoot: true
-  runAsUser: 1000
+  privileged: true  # VULNERABILITY: Privileged container
   capabilities:
-    drop:
-    - ALL
+    add:
+      - ALL  # VULNERABILITY: All capabilities
+  allowPrivilegeEscalation: true
 
 service:
-  type: ClusterIP
+  type: LoadBalancer
   port: 80
 
 env:
   - name: ENVIRONMENT
-    value: "prod"
+    value: "dev"
   - name: MONGO_URI
-    value: ""
-
-ingress:
-  enabled: false
+    value: "mongodb://admin:insecurepass@MONGODB_HOST_PLACEHOLDER:27017/wizknowledge"
 
 resources:
   limits:
