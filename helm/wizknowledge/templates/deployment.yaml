@@ -40,7 +40,35 @@ spec:
           env:
             {{- toYaml .Values.env | nindent 12 }}
           command: ["/bin/sh"]
-          args: ["-c", "echo 'Starting app container...' && echo 'Wiz Technical Exercise - WizKnowledge Container' > /tmp/wizexercise.txt && echo 'Starting Python app...' && python app.py"]
+          args: ["-c", "echo 'Starting app container...' && cat > /tmp/wizexercise.txt << 'EOF'
+ __      __ _        _  __                        _             _              
+ \\ \\    / /(_)      | |/ /                       | |           | |             
+  \\ \\  / /  _  ____ | ' /  _ __    ___  __      __| |  ___   __| |  __ _   ___ 
+   \\ \\/ /  | ||_  / |  <  | '_ \\  / _ \\ \\ \\ /\\ / /| | / _ \\ / _` | / _` | / _ \\
+    \\  /   | | / /  | . \\ | | | || (_) | \\ V  V / | ||  __/| (_| || (_| ||  __/
+     \\/    |_|/___| |_|\\_\\|_| |_| \\___/   \\_/\\_/  |_| \\___| \\__,_| \\__, | \\___|
+                                                                    __/ |      
+                                                                   |___/       
+
+🔍 WizKnowledge Security Research Platform 🔍
+
+⚡ SYSTEM STATUS: OPERATIONAL ⚡
+📊 Security Research Database: ONLINE
+🧠 AI Knowledge Engine: ACTIVE
+🔐 Vulnerability Database: SYNCHRONIZED
+
+🎯 Mission: Advanced Security Research & Knowledge Discovery
+🛡️  Purpose: Educational Security Lab Environment
+⚠️  Warning: This is a controlled security testing environment
+
+═══════════════════════════════════════════════════════════════
+🚀 Container successfully deployed in Kubernetes cluster
+🏗️  Built with secure development practices
+🌐 Ready to serve security research queries
+═══════════════════════════════════════════════════════════════
+
+EOF
+&& echo 'Starting Python app...' && python app.py"]
           livenessProbe:
             httpGet:
               path: /
