@@ -26,7 +26,7 @@ import uvicorn
 SECRET_KEY = os.getenv("SECRET_KEY", "vulnerable-secret-key-123")  # VULNERABILITY: Weak default secret
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
-MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://localhost:27017/wizknowledge")
+MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://localhost:27017/wizknowledge")  # Updated for MongoDB 3.2 compatibility
 
 # Security setup
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
