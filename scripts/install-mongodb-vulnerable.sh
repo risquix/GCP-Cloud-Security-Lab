@@ -216,7 +216,7 @@ sudo chmod +x /usr/local/bin/backup-mongodb.sh
 
 # Setup cron job
 echo "[$(date)] Setting up backup cron job..."
-echo "*/30 * * * * root /usr/local/bin/backup-mongodb.sh >> /var/log/mongodb-backup.log 2>&1" | sudo tee /etc/cron.d/mongodb-backup
+echo "*/30 * * * * root /usr/local/bin/backup-mongodb.sh >> /var/log/mongodb-backup.log 2>&1" | sudo tee /etc/cron.d/mongodb-backupls
 
 # Set weak permissions (vulnerabilities)
 echo "[$(date)] Setting weak file permissions (intentional)..."
