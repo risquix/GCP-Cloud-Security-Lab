@@ -35,3 +35,7 @@ logs/
 # Kubernetes
 kubeconfig
 *.kubeconfig
+
+#Local Only
+docker-compose.yml
+README-LOCAL-TESTING.md
