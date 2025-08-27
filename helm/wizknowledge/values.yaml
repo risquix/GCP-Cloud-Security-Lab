@@ -33,11 +33,11 @@ env:
   - name: ENVIRONMENT
     value: "dev"
   - name: MONGO_URI
-    value: "mongodb://admin:insecurepass@MONGODB_HOST_PLACEHOLDER:27017/wizknowledge"
+    value: "mongodb://admin:insecurepass@MONGODB_HOST_PLACEHOLDER:27017/wizknowledge?authSource=admin"
   - name: MONGODB_URI
-    value: "mongodb://admin:insecurepass@MONGODB_HOST_PLACEHOLDER:27017/wizknowledge"
+    value: "mongodb://admin:insecurepass@MONGODB_HOST_PLACEHOLDER:27017/wizknowledge?authSource=admin"
   - name: DATABASE_URL
-    value: "mongodb://admin:insecurepass@MONGODB_HOST_PLACEHOLDER:27017/wizknowledge"
+    value: "mongodb://admin:insecurepass@MONGODB_HOST_PLACEHOLDER:27017/wizknowledge?authSource=admin"
 
 resources:
   limits:
